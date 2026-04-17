@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Brand */
+  --color-brand: #2563eb;
+  --color-brand-ring: #93c5fd;
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+
+  /* Text */
+  --color-text-primary: #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted: #6b7280;
+
+  /* Surface */
+  --color-surface: #f9fafb;
+  --color-surface-overlay: #f3f4f6;
+
+  /* Border */
+  --color-border: #e5e7eb;
+
+  /* Semantic */
+  --color-error: #ef4444;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    'Noto Sans TC',
+    sans-serif;
+  color: var(--color-text-primary);
+  background-color: var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 通用 btn 類別（對齊 DESIGN_SYSTEM） */
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg
+      bg-[--color-brand] text-white font-medium text-sm
+      hover:brightness-110 transition-colors
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 rounded-lg
+      bg-white text-[--color-text-secondary] font-medium text-sm
+      border border-[--color-border]
+      hover:bg-[--color-surface-overlay] transition-colors
+      disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-lg
+      text-[--color-text-secondary] font-medium text-sm
+      hover:bg-[--color-surface-overlay] transition-colors;
+  }
+
+  .card {
+    @apply bg-white border border-[--color-border] rounded-xl shadow-sm;
+  }
+
+  .label {
+    @apply block text-xs font-medium text-[--color-text-muted] mb-1;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 text-sm
+      border border-[--color-border] rounded-lg
+      bg-white text-[--color-text-primary]
+      placeholder:text-[--color-text-muted]
+      focus:outline-none focus:ring-2 focus:ring-[--color-brand-ring] focus:border-[--color-brand]
+      transition-colors;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+      bg-[--color-surface-overlay] text-[--color-text-muted];
+  }
+}
+
+/* scrollbar subtlety */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
