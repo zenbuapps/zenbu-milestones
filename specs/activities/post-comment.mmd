@@ -1,0 +1,78 @@
+%% Activity: 訪客對既有 Issue 留言流程
+%% 對應 User Stories: US-V-002 / US-V-005 / US-V-006
+%% 對應 AC: AC-Group 2（留言）、AC-Group 3（Turnstile 與錯誤處理）、AC-Group 7（效能：md-editor lazy load）
+%% 對應 ADR: ADR-001（Worker proxy）/ ADR-002（Turnstile Managed）/ ADR-009（留言不做本地樂觀更新）/ ADR-010（md-editor lazy）
+
+flowchart TD
+    Visitor[[訪客]]
+    SPA[(SPA / RoadmapPage / IssueList)]
+    Worker[(Cloudflare Worker)]
+    Siteverify[(Cloudflare siteverify)]
+    GitHub[(GitHub REST API)]
+
+    Visitor -->|1. 進入 RoadmapPage 展開 milestone| SPA
+    SPA --> CheckCanComment{repo canSubmitIssue === true?}
+    CheckCanComment -- 否 --> HideBtn[IssueList 不顯示留言按鈕]
+    CheckCanComment -- 是 --> ShowBtn[每個 issue 顯示留言按鈕 btn-ghost]
+
+    ShowBtn -->|2. 點擊 issue #N 的留言按鈕| OpenModal[開啟 VisitorCommentModal]
+    OpenModal --> LazyLoadEditor[lazy load @uiw/react-md-editor chunk]
+    LazyLoadEditor --> InitModal[Modal 初始化 標題: 對 #N 留言 只有 body 欄位 body 預設空白 不套 template 顯示原 issue 標題 唯讀 媒體上傳提示區 Turnstile widget]
+
+    InitModal --> FillForm[[訪客填寫 body]]
+    FillForm --> ClientValidate{前端即時驗證 body 長度 1-5000 字?}
+    ClientValidate -- 不合法 --> InlineFieldError[body 下方紅字提示 送出按鈕 disabled]
+    InlineFieldError --> FillForm
+    ClientValidate -- 合法 --> TurnstileCheck{Turnstile token 已取得?}
+
+    TurnstileCheck -- 尚未 --> WaitChallenge[顯示 Turnstile widget 送出按鈕 disabled]
+    WaitChallenge --> TurnstileResult{challenge 通過?}
+    TurnstileResult -- 失敗 --> TurnstileWidgetErr[widget 顯示錯誤 可重試]
+    TurnstileWidgetErr --> WaitChallenge
+    TurnstileResult -- 通過 --> GotToken[取得 turnstileToken 送出按鈕 enabled]
+    TurnstileCheck -- 已取得 --> GotToken
+
+    GotToken -->|3. 點擊送出留言| Submitting[Modal 進入 submitting 狀態 欄位 disabled 按鈕 Loader2]
+    Submitting --> PostWorker[POST WORKER_URL/api/v1/repos/:name/issues/:number/comments 含 body turnstileToken repo issueNumber]
+    PostWorker --> Worker
+
+    Worker --> CheckCORS{Origin 在白名單?}
+    CheckCORS -- 否 --> RespCORS[403 CORS_REJECTED]
+    RespCORS --> BrowserBlock[瀏覽器 console CORS error]
+
+    CheckCORS -- 是 --> VerifyTurnstile[呼叫 Cloudflare siteverify]
+    VerifyTurnstile --> Siteverify
+    Siteverify --> TurnstileVerdict{siteverify 通過?}
+    TurnstileVerdict -- 否 --> RespTurnstileFail[403 TURNSTILE_FAILED]
+
+    TurnstileVerdict -- 是 --> ValidatePayload{payload 合法? body 長度 issueNumber 為正整數}
+    ValidatePayload -- 否 --> RespInvalid[400 INVALID_PAYLOAD]
+
+    ValidatePayload -- 是 --> LoadAllowlist[讀取 summary.json cache TTL 5 分鐘]
+    LoadAllowlist --> CheckRepoAllowed{target repo canSubmitIssue === true?}
+    CheckRepoAllowed -- 否 --> RespRepoNotAllowed[403 REPO_NOT_ALLOWED]
+
+    CheckRepoAllowed -- 是 --> CallGitHub[POST /repos/zenbuapps/:name/issues/:number/comments body含 body]
+    CallGitHub --> GitHub
+    GitHub --> GitHubResult{GitHub 回應?}
+
+    GitHubResult -- 5xx --> RespUpstream[502 UPSTREAM_ERROR]
+    GitHubResult -- 429 rate limit --> RespRateLimited[429 RATE_LIMITED]
+    GitHubResult -- 201 Created --> Resp201[Worker 回 201 success:true data id htmlUrl]
+
+    RespTurnstileFail --> ModalInlineErr
+    RespInvalid --> ModalInlineErr
+    RespRepoNotAllowed --> ModalInlineErr
+    RespUpstream --> ModalInlineErr
+    RespRateLimited --> ModalInlineErr
+
+    ModalInlineErr[Modal 不關閉 送出按鈕上方 inline 紅字 AlertCircle 圖示 body 內容保留]
+    ModalInlineErr --> ResetTurnstile{error code === TURNSTILE_FAILED?}
+    ResetTurnstile -- 是 --> DoReset[reset Turnstile widget]
+    ResetTurnstile -- 否 --> KeepState[保留 body 與 token]
+    DoReset --> FillForm
+    KeepState --> FillForm
+
+    Resp201 --> CloseModal[Modal 關閉]
+    CloseModal --> ToastSuccess[Toast 留言已送出 含連結到 htmlUrl GitHub issuecomment 錨點]
+    CloseModal --> NoLocalUpdate[RoadmapPage 本地 state 不變 IssueLite 無 comments 欄位]

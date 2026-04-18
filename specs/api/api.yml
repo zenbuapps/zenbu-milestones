@@ -1,0 +1,563 @@
+# =============================================================================
+# Zenbu Milestones — Cloudflare Worker Proxy API
+#
+# 此檔由 clarifier 流程產出，與 specs/visitor-issue-submission/data-contract.md
+# 為同步契約。任一端變更必須同步另一端，嚴禁單邊演化。
+#
+# 來源文件：
+#   - specs/visitor-issue-submission/data-contract.md（§5 Worker API Envelope）
+#   - specs/visitor-issue-submission/architecture.md（ADR-001 / ADR-002 / ADR-005 / ADR-007）
+#   - specs/visitor-issue-submission/requirements.md（FR-005 / FR-006 / FR-014 / FR-015 / FR-016）
+# =============================================================================
+
+openapi: 3.1.0
+
+info:
+  title: Zenbu Milestones Worker API
+  version: 0.1.0
+  summary: 訪客建立 issue / 留言的 Cloudflare Worker proxy。
+  description: |
+    Zenbu Milestones 儀表板（GitHub Pages 靜態網站）的寫入管道。
+
+    **定位**：前端不直接呼叫 GitHub API；所有「建立 issue」與「對既有 issue 留言」
+    一律 POST 到本 Worker，由 Worker 代行 GitHub REST v3 呼叫。前端 bundle 絕不
+    包含寫入用 PAT（`ZENBU_ORG_WRITE_TOKEN`）。
+
+    **安全控制**：
+      1. CORS 白名單（FR-014）：僅接受 `zenbuapps.github.io`、`localhost:5173`、
+         `localhost:4173` 三個來源。
+      2. Cloudflare Turnstile（FR-006 / ADR-002）：每一個寫入請求必帶 `turnstileToken`，
+         Worker 以 siteverify 端點驗證。
+      3. Repo allow-list（ADR-007）：Worker 讀取 `summary.json` 的 `canSubmitIssue`
+         欄位，防止繞過前端對不允許的 repo 寫入。
+      4. 強制附加 `待審核` label（FR-007）：Worker 在建立 issue 時無條件加入，
+         以便 maintainer triage。
+
+    **回應 envelope**：統一為 `{ success: true, data: ... }` 或
+    `{ success: false, error: { code, message } }`，詳見 components/schemas。
+
+    **可觀測性**：Worker 以 `console.log`/`console.error` 輸出結構化 JSON log
+    （NFR-012），可於 Cloudflare Dashboard 即時查看。
+  contact:
+    email: info@morepower.club
+  # license 欄位暫留空，V1 未決定授權條款
+
+servers:
+  - url: https://zenbu-milestones-api.{account}.workers.dev
+    description: |
+      生產環境（Cloudflare Workers 免費 workers.dev 子域，ADR-005）。
+      實際子域由 wrangler 部署後決定——部署完成後將 URL 寫入 GitHub Actions 的
+      `VITE_WORKER_URL` secret，供 Vite build-time 注入前端 bundle。
+    variables:
+      account:
+        default: your-cf-account
+        description: Cloudflare account 的 workers.dev 子域前綴。
+  - url: http://localhost:8787
+    description: |
+      開發環境（`wrangler dev` 本地模擬，預設 port 8787）。
+      搭配 `pnpm dev`（port 5173）或 `pnpm preview`（port 4173）測試跨域呼叫。
+
+tags:
+  - name: issues
+    description: 建立 GitHub issue。
+  - name: comments
+    description: 對既有 issue 留言。
+
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+paths:
+  /api/v1/repos/{name}/issues:
+    parameters:
+      - $ref: '#/components/parameters/RepoName'
+
+    post:
+      tags: [issues]
+      summary: 建立新 issue
+      operationId: createIssue
+      description: |
+        訪客於 RoadmapPage 的 Modal 送出表單後呼叫。流程（architecture.md 高階資料流圖）：
+
+          1. Worker 驗 Origin（CORS 白名單，FR-014）
+          2. Worker 驗 Turnstile token（siteverify，FR-006）
+          3. Worker 驗 payload（title/body/type 長度與值域，FR-003）
+          4. Worker 驗 target repo 的 `canSubmitIssue`（ADR-007，fetch summary.json 並快取 5 分鐘）
+          5. Worker 強制把 `待審核` 加入 labels（FR-007；若該 label 尚未存在於 repo，
+             先呼叫 `POST /repos/{owner}/{repo}/labels` 建立再重試）
+          6. Worker 以 `ZENBU_ORG_WRITE_TOKEN` 呼叫 GitHub REST
+             `POST /repos/zenbuapps/{name}/issues`
+          7. Worker 回 201 Created + success envelope
+
+        **Rate limit**：
+          - 受限於 Cloudflare Workers 免費方案（每日 100k requests，NFR-004）
+          - 受限於 GitHub REST API 的 per-PAT 限額（通常 5000 requests/hour）
+          - 觸發任一限額 → 回 429 `RATE_LIMITED`
+
+        **CORS**：僅允許下列 Origin（NFR-005，精確回傳實際 Origin 而非 `*`）：
+          - `https://zenbuapps.github.io`
+          - `http://localhost:5173`
+          - `http://localhost:4173`
+      security:
+        - TurnstileToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIssueRequest'
+            examples:
+              withType:
+                summary: 帶 Issue Type（org 已啟用 Issue Types）
+                value:
+                  title: "登入頁在 Safari 17 上錯位"
+                  body: "步驟：\n1. 以 Safari 17.3 開啟 /login\n2. 輸入 email 後\n3. 按下一步按鈕樣式跳 8px\n\n### 舉報聯絡方式\n(選填) Email / GitHub handle：reporter@example.com"
+                  type: "Bug"
+                  turnstileToken: "XXXX.DUMMY.TOKEN.XXXX"
+              withoutType:
+                summary: 不帶 type（org 未啟用 Issue Types 或 issue-types.json 為空）
+                value:
+                  title: "支援 dark mode"
+                  body: "Would love a dark theme option."
+                  turnstileToken: "XXXX.DUMMY.TOKEN.XXXX"
+      responses:
+        '201':
+          description: Issue 建立成功。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateIssueSuccessResponse'
+              examples:
+                typical:
+                  value:
+                    success: true
+                    data:
+                      number: 42
+                      htmlUrl: "https://github.com/zenbuapps/example-repo/issues/42"
+                      title: "登入頁在 Safari 17 上錯位"
+                      type: "Bug"
+                      labels: ["待審核"]
+        '400':
+          $ref: '#/components/responses/InvalidPayload'
+        '403':
+          description: |
+            Turnstile 驗證失敗 / Origin 不在白名單 / target repo 不允許提交。
+            以 `error.code` 區分：
+              - `TURNSTILE_FAILED`
+              - `CORS_REJECTED`
+              - `REPO_NOT_ALLOWED`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                turnstileFailed:
+                  summary: Turnstile token 無效或過期
+                  value:
+                    success: false
+                    error:
+                      code: TURNSTILE_FAILED
+                      message: "人機驗證失敗，請重新嘗試。"
+                corsRejected:
+                  summary: Origin 不在白名單（理論上瀏覽器已先擋，此回應用於 curl / 直接呼叫）
+                  value:
+                    success: false
+                    error:
+                      code: CORS_REJECTED
+                      message: "此來源不允許呼叫本 API。"
+                repoNotAllowed:
+                  summary: repo 的 canSubmitIssue === false
+                  value:
+                    success: false
+                    error:
+                      code: REPO_NOT_ALLOWED
+                      message: "此 repo 目前不接受外部提交。"
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /api/v1/repos/{name}/issues/{number}/comments:
+    parameters:
+      - $ref: '#/components/parameters/RepoName'
+      - $ref: '#/components/parameters/IssueNumber'
+
+    post:
+      tags: [comments]
+      summary: 對既有 issue 留言
+      operationId: createComment
+      description: |
+        訪客於 RoadmapPage 的 IssueList 點擊某個 issue 的「留言」按鈕，填寫 body
+        後呼叫。流程同 createIssue，但：
+          - 不驗 Issue Types / 不驗 title（payload 僅 `body` + `turnstileToken`）
+          - 不附加 `待審核` label（留言本身不是新 issue）
+          - 呼叫 GitHub REST `POST /repos/zenbuapps/{name}/issues/{number}/comments`
+
+        **成功回應**：回傳 comment `id` 與帶 `#issuecomment-{id}` 錨點的 URL，
+        前端 Toast 連結直接跳到該則留言。前端**不更新本地 state**
+        （`IssueLite` 無 comments 欄位，見 FR-012 / ADR-009）。
+
+        **Rate limit / CORS**：同 createIssue。
+      security:
+        - TurnstileToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCommentRequest'
+            examples:
+              typical:
+                value:
+                  body: "感謝回報，我們已在 v1.2.0 修復此問題，請更新後再試。"
+                  turnstileToken: "XXXX.DUMMY.TOKEN.XXXX"
+      responses:
+        '201':
+          description: 留言建立成功。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateCommentSuccessResponse'
+              examples:
+                typical:
+                  value:
+                    success: true
+                    data:
+                      id: 12345
+                      htmlUrl: "https://github.com/zenbuapps/example-repo/issues/42#issuecomment-12345"
+        '400':
+          $ref: '#/components/responses/InvalidPayload'
+        '403':
+          description: |
+            Turnstile 驗證失敗 / Origin 不在白名單 / target repo 不允許留言。
+            以 `error.code` 區分（同 createIssue）。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+# -----------------------------------------------------------------------------
+# Components
+# -----------------------------------------------------------------------------
+components:
+
+  # ---------- Security schemes ----------
+  securitySchemes:
+    TurnstileToken:
+      # Turnstile token 並非 HTTP header，而是 request body 內的 `turnstileToken`
+      # 欄位。OpenAPI 3.1 未原生支援「body 內的 token」此形式，因此以 apiKey 於
+      # requestBody 註記（in: header 為語意占位），並於 description 說明實際位置。
+      type: apiKey
+      in: header
+      name: X-Turnstile-Token-Placeholder
+      description: |
+        **實際實作**：Turnstile token 走 request body 的 `turnstileToken` 欄位
+        （見各 request schema），非 HTTP header。OpenAPI 3.1 的 securitySchemes
+        限制無法表達 body field，此處以 apiKey 占位符註記「此端點需 Turnstile 驗證」。
+
+        Worker 收到後呼叫 `https://challenges.cloudflare.com/turnstile/v0/siteverify`
+        驗證（FR-006 / ADR-002）；失敗回 `403 TURNSTILE_FAILED`。
+
+  # ---------- Reusable parameters ----------
+  parameters:
+    RepoName:
+      name: name
+      in: path
+      required: true
+      description: |
+        `zenbuapps` 組織底下的 repo short name（例：`example-repo`）。Worker 內部
+        會拼接 `zenbuapps/{name}` 呼叫 GitHub。repo 必須滿足 `canSubmitIssue === true`
+        （ADR-004 / ADR-007），否則回 `REPO_NOT_ALLOWED`。
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._-]+$'
+        minLength: 1
+        maxLength: 100
+
+    IssueNumber:
+      name: number
+      in: path
+      required: true
+      description: GitHub 的 issue number（正整數）。
+      schema:
+        type: integer
+        minimum: 1
+
+  # ---------- Reusable responses ----------
+  responses:
+    InvalidPayload:
+      description: |
+        Payload 欄位缺失、超長、或 type 不在 `issue-types.json` 清單內
+        （FR-003 / FR-015）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            titleTooLong:
+              value:
+                success: false
+                error:
+                  code: INVALID_PAYLOAD
+                  message: "title 長度需為 1–100 字。"
+            missingBody:
+              value:
+                success: false
+                error:
+                  code: INVALID_PAYLOAD
+                  message: "body 為必填，且長度需 1–5000 字。"
+            unknownType:
+              value:
+                success: false
+                error:
+                  code: INVALID_PAYLOAD
+                  message: "type 不在允許清單內。"
+
+    RateLimited:
+      description: |
+        Worker 自身或 GitHub 的 rate limit 被觸發（FR-015）。
+        前端應顯示「請稍後再試」並延遲重啟送出按鈕（例如 60 秒，見 architecture.md
+        錯誤流程表）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            rateLimited:
+              value:
+                success: false
+                error:
+                  code: RATE_LIMITED
+                  message: "請求過於頻繁，請稍後再試。"
+
+    UpstreamError:
+      description: |
+        GitHub API 回 5xx / 401（PAT 失效）/ 其他非預期錯誤。前端顯示「稍後再試」，
+        送出按鈕重啟（architecture.md 錯誤流程表）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            upstreamError:
+              value:
+                success: false
+                error:
+                  code: UPSTREAM_ERROR
+                  message: "GitHub 服務暫時無法使用，請稍後再試。"
+
+    InternalError:
+      description: |
+        Worker 未預期錯誤（fallback）。**注意**：此 code 不在 data-contract §5.3
+        的主集合，但出現在 §5.5 的 HTTP Status Code 對照表，作為兜底 code。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            internal:
+              value:
+                success: false
+                error:
+                  code: INTERNAL
+                  message: "伺服器發生未預期錯誤。"
+
+  # ---------- Schemas ----------
+  schemas:
+
+    # ===== Request bodies =====
+
+    CreateIssueRequest:
+      type: object
+      additionalProperties: false
+      required: [title, body, turnstileToken]
+      description: 建立新 issue 的 request payload（data-contract §5.1）。
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: |
+            Issue 標題。前端 trim 兩端空白後才驗證長度（FR-003）；Worker 亦 trim
+            一次作為防線。
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: |
+            Issue 內容（GitHub Flavored Markdown）。前端在開啟 Modal 時預填
+            「### 舉報聯絡方式」template 於 body 頂端，使用者可編輯或刪除（FR-003）。
+        type:
+          type: string
+          nullable: false
+          description: |
+            GitHub Issue Type 名稱（2024/09 GA），值必須在 `public/data/issue-types.json`
+            清單內（執行期驗證）。**可省略**：org 未啟用 Issue Types 或
+            `issue-types.json` 為空時前端隱藏 type 欄位，Worker 不帶 type
+            （FR-008 / ADR-003）。
+            範例值：`"Bug"` / `"Feature"` / `"Task"`。
+          example: Bug
+        turnstileToken:
+          type: string
+          minLength: 1
+          description: |
+            從 Cloudflare Turnstile Managed widget 取得的 token。Worker 以
+            siteverify 端點驗證（FR-006 / ADR-002），失敗回 `403 TURNSTILE_FAILED`。
+
+    CreateCommentRequest:
+      type: object
+      additionalProperties: false
+      required: [body, turnstileToken]
+      description: 對既有 issue 留言的 request payload（data-contract §5.2）。
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: |
+            留言內容（GitHub Flavored Markdown）。限制同 issue body（FR-004）。
+            不套用「舉報聯絡方式」template（留言用途不同）。
+        turnstileToken:
+          type: string
+          minLength: 1
+          description: 同 CreateIssueRequest.turnstileToken。
+
+    # ===== Success envelopes =====
+
+    CreateIssueSuccessResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      description: 建立 issue 成功的 response envelope（data-contract §5.4）。
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/CreateIssueData'
+
+    CreateCommentSuccessResponse:
+      type: object
+      additionalProperties: false
+      required: [success, data]
+      description: 留言成功的 response envelope（data-contract §5.4）。
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: '#/components/schemas/CreateCommentData'
+
+    CreateIssueData:
+      type: object
+      additionalProperties: false
+      required: [number, htmlUrl, title, type, labels]
+      description: |
+        Worker 回傳的 issue 資料（data-contract §5.4）。
+        前端據此組一個 optimistic `IssueLite` append 到本地 state（ADR-009 / FR-012）。
+      properties:
+        number:
+          type: integer
+          minimum: 1
+          description: GitHub issue number。
+        htmlUrl:
+          type: string
+          format: uri
+          description: |
+            GitHub UI 的 issue URL，例如
+            `https://github.com/zenbuapps/example-repo/issues/42`。
+        title:
+          type: string
+          description: 實際存到 GitHub 的 title（trim 後）。
+        type:
+          type: string
+          nullable: true
+          description: |
+            實際存到 GitHub 的 Issue Type。org 未啟用或 request 未帶 type 時為 `null`。
+        labels:
+          type: array
+          description: |
+            實際附加的 labels 名稱陣列。**保證含 `"待審核"`**（FR-007 Worker 強制加）。
+          items:
+            type: string
+            minLength: 1
+          # data-contract.md 未定義 `待審核` 以外的最小集合，此處僅註記「保證含」
+          example: ["待審核"]
+
+    CreateCommentData:
+      type: object
+      additionalProperties: false
+      required: [id, htmlUrl]
+      description: Worker 回傳的留言資料（data-contract §5.4）。
+      properties:
+        id:
+          type: integer
+          minimum: 1
+          description: GitHub comment ID。
+        htmlUrl:
+          type: string
+          format: uri
+          description: |
+            帶 `#issuecomment-{id}` 錨點的留言 URL，例如
+            `https://github.com/zenbuapps/example-repo/issues/42#issuecomment-12345`。
+
+    # ===== Error envelope =====
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [success, error]
+      description: 統一錯誤 envelope（data-contract §5.3 / FR-015）。
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+              minLength: 1
+              description: |
+                人類可讀的錯誤訊息（zh-Hant，遵循 NFR-010）。前端可直接 inline
+                顯示於 Modal 內或 Toast。
+
+    ErrorCode:
+      type: string
+      description: |
+        錯誤代碼枚舉。前端依 `code` 決定 UI 行為
+        （architecture.md 錯誤流程表 + data-contract §5.5）：
+
+          - `TURNSTILE_FAILED` (403) — Turnstile 驗證失敗。Modal 不關閉，
+            inline 顯示錯誤，reset Turnstile widget。
+          - `CORS_REJECTED` (403) — Origin 不在白名單。理論上瀏覽器先擋，
+            前端通常不會收到此 code（curl / 直接呼叫才會）。
+          - `INVALID_PAYLOAD` (400) — 欄位缺失 / 超長 / type 不在清單。
+            Modal 不關閉，inline 顯示錯誤並指向對應欄位。
+          - `REPO_NOT_ALLOWED` (403) — target repo 的 `canSubmitIssue === false`。
+            Modal 不關閉，顯示「此 repo 不接受外部提交」。
+          - `UPSTREAM_ERROR` (502) — GitHub 回 5xx / 429 / 401。Modal 不關閉，
+            顯示「稍後再試」，送出按鈕重啟。
+          - `RATE_LIMITED` (429) — Worker 自身或 GitHub 的 rate limit。Modal
+            不關閉，顯示「請稍後」，送出按鈕延遲重啟（例：60 秒）。
+          - `INTERNAL` (500) — Worker 未預期錯誤（兜底 code，data-contract §5.5
+            HTTP Status Code 對照表的 fallback，不在 §5.3 主集合）。
+      enum:
+        - TURNSTILE_FAILED
+        - CORS_REJECTED
+        - INVALID_PAYLOAD
+        - REPO_NOT_ALLOWED
+        - UPSTREAM_ERROR
+        - RATE_LIMITED
+        - INTERNAL

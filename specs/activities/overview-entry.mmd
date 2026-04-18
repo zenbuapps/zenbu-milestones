@@ -1,0 +1,45 @@
+%% Activity: OverviewPage 進入 → 觸發建立 Issue Modal 的 UX 路徑
+%% 對應 User Stories: US-V-001 / US-V-007
+%% 對應 AC: AC-Group 1 Rule「RoadmapPage 應在 canSubmitIssue=true 時顯示建立 issue 按鈕」、AC-Group 4（OverviewPage 分區）、AC-Group 8（向後相容：缺 canSubmitIssue 視為 false）
+%% 對應 ADR: ADR-004（canSubmitIssue 計算 + 兩區塊分區）
+
+flowchart TD
+    Visitor[[訪客]]
+    Summary[(public/data/summary.json)]
+    Overview[(OverviewPage)]
+    Roadmap[(RoadmapPage)]
+
+    Visitor -->|1. 開啟儀表板根路徑 #/| Overview
+    Overview --> LoadSummary[loadSummary 讀取 summary.json]
+    LoadSummary --> Summary
+    Summary --> Partition[依 canSubmitIssue 分流 repos]
+
+    Partition --> SubmittableGroup[submittableRepos = repos.filter canSubmitIssue === true]
+    Partition --> BrowseOnlyGroup[browseOnlyRepos = repos.filter canSubmitIssue !== true 含缺欄位 向後相容]
+
+    SubmittableGroup --> RenderSubmittable[渲染「接受訪客提交」區塊 RepoCard grid 依原排序 可在此建立 issue badge]
+    BrowseOnlyGroup --> RenderBrowseOnly[渲染「僅供瀏覽」折疊區塊 預設 collapsed 標題含數量]
+
+    RenderSubmittable --> UserChoice[[訪客選擇 repo 進入點]]
+    RenderBrowseOnly --> UserChoice
+
+    UserChoice --> WhichCard{點擊哪一區?}
+
+    WhichCard -- 接受訪客提交區 --> ClickSubmittable[點擊 RepoCard]
+    ClickSubmittable --> NavigateRoadmap[navigate #/repo/:name]
+    NavigateRoadmap --> Roadmap
+
+    WhichCard -- 僅供瀏覽區 --> ClickBrowseOnly[點擊列表項目]
+    ClickBrowseOnly --> ExternalGitHub[開新分頁外連到 github.com/zenbuapps/:name 不進入 SPA RoadmapPage]
+
+    Roadmap --> LoadDetail[loadRepoDetail :name 讀取 repos/:name.json]
+    LoadDetail --> GetCanSubmit[從 AppShell Outlet context 的 summary 取得該 repo 的 canSubmitIssue]
+    GetCanSubmit --> HeaderCheck{canSubmitIssue === true?}
+
+    HeaderCheck -- 否 --> HidePageBtn[PageHeader 不顯示建立 Issue 按鈕 僅顯示開啟 GitHub Repo 按鈕]
+    HidePageBtn --> BrowseMilestones[[訪客瀏覽 milestones 與 issues 僅讀取模式]]
+
+    HeaderCheck -- 是 --> ShowPageBtn[PageHeader 顯示建立 Issue 按鈕 btn-primary Plus 圖示 md 斷點響應式堆疊]
+    ShowPageBtn --> UserClickCreate[[訪客點擊建立 Issue 按鈕]]
+    UserClickCreate --> OpenIssueModal[setOpenIssueModal true 開啟 VisitorIssueModal]
+    OpenIssueModal --> HandoffToSubmit[交棒至 submit-issue.mmd 流程]

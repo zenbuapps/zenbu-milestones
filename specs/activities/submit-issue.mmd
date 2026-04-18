@@ -1,0 +1,82 @@
+%% Activity: 訪客建立 Issue 流程
+%% 對應 User Stories: US-V-001 / US-V-003 / US-V-004 / US-V-005 / US-V-006
+%% 對應 AC: AC-Group 1（建立 Issue）、AC-Group 3（Turnstile 與錯誤處理）、AC-Group 7（效能：md-editor lazy load）
+%% 對應 ADR: ADR-001（Worker proxy）/ ADR-002（Turnstile Managed）/ ADR-003（Issue Types + 待審核 label）/ ADR-007（Worker 端 canSubmitIssue 查驗）/ ADR-009（樂觀更新）/ ADR-010（md-editor lazy）
+
+flowchart TD
+    Visitor[[訪客]]
+    SPA[(SPA / RoadmapPage)]
+    Worker[(Cloudflare Worker)]
+    Siteverify[(Cloudflare siteverify)]
+    GitHub[(GitHub REST API)]
+
+    Visitor -->|1. 進入 RoadmapPage| SPA
+    SPA --> CheckCanSubmit{canSubmitIssue === true?}
+    CheckCanSubmit -- 否 --> HideBtn[隱藏建立 Issue 按鈕]
+    CheckCanSubmit -- 是 --> ShowBtn[顯示建立 Issue 按鈕 btn-primary]
+
+    ShowBtn -->|2. 點擊按鈕| OpenModal[開啟 VisitorIssueModal]
+    OpenModal --> LazyLoadEditor[lazy load @uiw/react-md-editor chunk]
+    LazyLoadEditor --> InitModal[Modal 初始化 預設 body template 媒體上傳提示區 Turnstile widget]
+
+    InitModal --> FillForm[[訪客填寫 title / body / 選 type]]
+    FillForm --> ClientValidate{前端即時驗證 title 1-100 字 body 1-5000 字 type 非空}
+    ClientValidate -- 不合法 --> InlineFieldError[欄位下方紅字提示 送出按鈕 disabled]
+    InlineFieldError --> FillForm
+    ClientValidate -- 合法 --> TurnstileCheck{Turnstile token 已取得?}
+
+    TurnstileCheck -- 尚未 --> WaitChallenge[顯示 Turnstile Managed widget 送出按鈕 disabled]
+    WaitChallenge --> TurnstileResult{challenge 通過?}
+    TurnstileResult -- 失敗 --> TurnstileWidgetErr[widget 自行顯示錯誤 使用者可重試]
+    TurnstileWidgetErr --> WaitChallenge
+    TurnstileResult -- 通過 --> GotToken[取得 turnstileToken 送出按鈕 enabled]
+    TurnstileCheck -- 已取得 --> GotToken
+
+    GotToken -->|3. 點擊送出 Issue| Submitting[Modal 進入 submitting 狀態 所有欄位 disabled 按鈕顯示 Loader2]
+    Submitting --> PostWorker[POST WORKER_URL/api/v1/repos/:name/issues 含 title body type turnstileToken repo]
+    PostWorker --> Worker
+
+    Worker --> CheckCORS{Origin 在白名單?}
+    CheckCORS -- 否 --> RespCORS[403 CORS_REJECTED]
+    RespCORS --> BrowserBlock[瀏覽器 console CORS error]
+
+    CheckCORS -- 是 --> VerifyTurnstile[呼叫 Cloudflare siteverify]
+    VerifyTurnstile --> Siteverify
+    Siteverify --> TurnstileVerdict{siteverify 通過?}
+    TurnstileVerdict -- 否 --> RespTurnstileFail[403 TURNSTILE_FAILED]
+
+    TurnstileVerdict -- 是 --> ValidatePayload{payload schema 合法? title 長度 type 在清單}
+    ValidatePayload -- 否 --> RespInvalid[400 INVALID_PAYLOAD]
+
+    ValidatePayload -- 是 --> LoadAllowlist[讀取 summary.json cache TTL 5 分鐘 ADR-007]
+    LoadAllowlist --> CheckRepoAllowed{target repo canSubmitIssue === true?}
+    CheckRepoAllowed -- 否 --> RespRepoNotAllowed[403 REPO_NOT_ALLOWED]
+
+    CheckRepoAllowed -- 是 --> AppendLabel[強制附加 待審核 label 合併使用者可能傳入的 labels]
+    AppendLabel --> CallGitHub[POST /repos/zenbuapps/:name/issues body含 title body type labels]
+    CallGitHub --> GitHub
+    GitHub --> GitHubResult{GitHub 回應?}
+
+    GitHubResult -- 5xx --> RespUpstream[502 UPSTREAM_ERROR log upstreamStatus]
+    GitHubResult -- 429 rate limit --> RespRateLimited[429 RATE_LIMITED]
+    GitHubResult -- 201 Created --> Resp201[Worker 回 201 success:true data number htmlUrl title type labels]
+
+    RespTurnstileFail --> ModalInlineErr
+    RespInvalid --> ModalInlineErr
+    RespRepoNotAllowed --> ModalInlineErr
+    RespUpstream --> ModalInlineErr
+    RespRateLimited --> ModalInlineErr
+
+    ModalInlineErr[Modal 不關閉 送出按鈕上方 inline 紅字 AlertCircle 圖示 表單內容保留]
+    ModalInlineErr --> ResetTurnstile{error code === TURNSTILE_FAILED?}
+    ResetTurnstile -- 是 --> DoReset[reset Turnstile widget 使用者可重新 challenge]
+    ResetTurnstile -- 否 --> KeepState[保留欄位與 token]
+    DoReset --> FillForm
+    KeepState --> FillForm
+
+    Resp201 --> CloseModal[Modal 在 500ms 內關閉]
+    CloseModal --> ToastSuccess[Toast 右下角 issue #number 已建立 含連結到 htmlUrl]
+    CloseModal --> OptimisticUpdate[樂觀更新 本地 state 以 Worker 回傳資料組 IssueLite append 到對應 milestone issues]
+    OptimisticUpdate --> RenderList[RoadmapPage 立即顯示新 issue]
+
+    RenderList -.->|下一次 cron ≤ 1 小時| CronNote[CI 重跑 fetcher 新 issue 進入 public/data/*.json]
