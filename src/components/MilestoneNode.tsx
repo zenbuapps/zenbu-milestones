@@ -80,7 +80,7 @@ const MilestoneNode = ({ milestone, expanded, onToggle }: TMilestoneNodeProps) =
   const completionPct = Math.round(milestone.completion * 100);
 
   return (
-    <div className="relative pb-8 pl-10 last:pb-0">
+    <div className="relative pb-6 pl-10 last:pb-0 sm:pb-8">
       {/* 狀態圓點，絕對定位在時間線上 */}
       <div
         className={`absolute left-0 top-1 flex h-8 w-8 items-center justify-center rounded-full ring-4 ring-[--color-surface] ${dotStyle.bg}`}

@@ -111,7 +111,7 @@ const RoadmapPage = () => {
       />
 
       {/* 資訊列 */}
-      <div className="card mb-6 grid grid-cols-2 gap-4 p-5 md:grid-cols-4">
+      <div className="card mb-6 grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-5 md:grid-cols-4">
         <InfoCell label="語言" value={detail.language ?? '—'} />
         <InfoCell label="最後更新" value={formatDate(detail.updatedAt)} />
         <InfoCell label="總 Milestones" value={String(total)} />

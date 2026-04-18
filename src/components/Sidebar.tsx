@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, LayoutDashboard, Lock } from 'lucide-react';
+import { ChevronRight, ExternalLink, LayoutDashboard, Lock, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { RepoSummary, Summary } from '../data/types';
@@ -6,6 +6,10 @@ import type { RepoSummary, Summary } from '../data/types';
 type TSidebarProps = {
   /** 載入中時為 null */
   summary: Summary | null;
+  /** 手機版 drawer 是否開啟；桌機版忽略此值（一律顯示） */
+  isOpen?: boolean;
+  /** 手機版 drawer 關閉回呼（點 NavLink、點 X、點 backdrop 皆觸發） */
+  onClose?: () => void;
 };
 
 /**
@@ -16,10 +20,10 @@ const sortByName = (a: RepoSummary, b: RepoSummary): number =>
 
 /**
  * 主要導覽側邊欄
- * 列出「總覽」入口與所有有 milestone 的 repos，
- * 底部提供可折疊的「其他 repos」清單（直接連到 GitHub）
+ * - 桌機（≥ md）常駐於左側（靜態佈局）
+ * - 手機（< md）為 off-canvas drawer，由 TopNav 的漢堡按鈕觸發
  */
-const Sidebar = ({ summary }: TSidebarProps) => {
+const Sidebar = ({ summary, isOpen = false, onClose }: TSidebarProps) => {
   const [showOthers, setShowOthers] = useState<boolean>(false);
 
   const { withMilestones, withoutMilestones } = useMemo(() => {
@@ -31,12 +35,34 @@ const Sidebar = ({ summary }: TSidebarProps) => {
     return { withMilestones: active, withoutMilestones: inactive };
   }, [summary]);
 
+  const handleNavClick = () => {
+    // 手機版點選後收起；桌機版 onClose 可忽略（state 不受影響）
+    onClose?.();
+  };
+
   return (
-    <aside className="flex w-[220px] flex-shrink-0 flex-col overflow-y-auto border-r border-[--color-border] bg-white">
-      <nav className="flex flex-col gap-1 px-3 py-4">
+    <aside
+      className={`fixed inset-y-0 left-0 top-16 z-40 flex w-[260px] max-w-[80vw] flex-shrink-0 flex-col overflow-y-auto border-r border-[--color-border] bg-white transition-transform duration-200 md:static md:top-0 md:w-[220px] md:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
+      {/* 手機版頂部關閉按鈕 */}
+      <div className="flex items-center justify-end px-2 py-2 md:hidden">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="關閉選單"
+          className="btn-ghost"
+        >
+          <X size={18} strokeWidth={2} />
+        </button>
+      </div>
+
+      <nav className="flex flex-col gap-1 px-3 pb-4 md:pt-4">
         <NavLink
           to="/"
           end
+          onClick={handleNavClick}
           className={({ isActive }) =>
             `flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
               isActive
@@ -61,6 +87,7 @@ const Sidebar = ({ summary }: TSidebarProps) => {
           <NavLink
             key={repo.name}
             to={`/repo/${repo.name}`}
+            onClick={handleNavClick}
             className={({ isActive }) =>
               `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
                 isActive

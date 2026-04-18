@@ -19,15 +19,15 @@ type TStatCardProps = {
  * 用於頁面頂部顯示核心指標，icon 方塊 + 數值 + 標籤
  */
 const StatCard = ({ label, value, icon: Icon, color, sub }: TStatCardProps) => (
-  <div className="card p-5 flex items-center gap-4">
+  <div className="card flex items-center gap-3 p-4 sm:gap-4 sm:p-5">
     <div
-      className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg ${color}`}
+      className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11 ${color}`}
     >
       <Icon size={20} strokeWidth={2} />
     </div>
     <div className="min-w-0 flex-1">
       <div className="text-xs font-medium text-[--color-text-muted]">{label}</div>
-      <div className="mt-0.5 text-2xl font-semibold text-[--color-text-primary]">
+      <div className="mt-0.5 text-xl font-semibold text-[--color-text-primary] sm:text-2xl">
         {value}
       </div>
       {sub && <div className="mt-0.5 text-xs text-[--color-text-muted]">{sub}</div>}

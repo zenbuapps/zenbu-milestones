@@ -1,6 +1,6 @@
 import { AlertOctagon } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import EmptyState from './components/EmptyState';
 import LoadingSpinner from './components/LoadingSpinner';
 import Sidebar from './components/Sidebar';
@@ -18,11 +18,13 @@ export type TAppShellContext = {
 
 /**
  * 應用外殼
- * 負責：載入 summary.json、組合 TopNav + Sidebar + main outlet
+ * 負責：載入 summary.json、組合 TopNav + Sidebar + main outlet、協調手機版 drawer 狀態
  */
 const AppShell = () => {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const location = useLocation();
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +39,26 @@ const AppShell = () => {
       cancelled = true;
     };
   }, []);
+
+  // 路由變化時自動關閉 drawer（保險；NavLink 的 onClick 也會關閉）
+  useEffect(() => {
+    setIsSidebarOpen(false);
+  }, [location.pathname]);
+
+  // drawer 開啟時鎖住 body scroll，避免底層頁面跟著捲動（僅影響手機版）
+  useEffect(() => {
+    if (isSidebarOpen) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = previous;
+      };
+    }
+    return undefined;
+  }, [isSidebarOpen]);
+
+  const openSidebar = useCallback(() => setIsSidebarOpen(true), []);
+  const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
 
   if (error) {
     return (
@@ -68,11 +90,22 @@ const AppShell = () => {
 
   return (
     <div className="flex h-full flex-col">
-      <TopNav summary={summary} />
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar summary={summary} />
+      <TopNav summary={summary} onMenuClick={openSidebar} />
+      <div className="relative flex flex-1 overflow-hidden">
+        <Sidebar summary={summary} isOpen={isSidebarOpen} onClose={closeSidebar} />
+
+        {/* 手機版 drawer backdrop */}
+        {isSidebarOpen && (
+          <button
+            type="button"
+            aria-label="關閉選單"
+            onClick={closeSidebar}
+            className="fixed inset-0 top-16 z-30 bg-black/40 md:hidden"
+          />
+        )}
+
         <main className="flex-1 overflow-y-auto bg-[--color-surface]">
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <Outlet context={context} />
           </div>
         </main>

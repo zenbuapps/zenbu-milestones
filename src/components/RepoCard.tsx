@@ -16,7 +16,7 @@ const RepoCard = ({ repo }: TRepoCardProps) => {
   const completionPct = Math.round(repo.completionRate * 100);
 
   return (
-    <div className="card flex flex-col gap-3 p-5 transition-shadow hover:shadow-md">
+    <div className="card flex flex-col gap-3 p-4 transition-shadow hover:shadow-md sm:p-5">
       {/* 標題列 */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
