@@ -6,7 +6,7 @@
  * `public/data/` for the SPA to consume.
  *
  * Usage:
- *   GH_TOKEN=ghp_xxx npm run fetch-data
+ *   GH_TOKEN=ghp_xxx pnpm run fetch-data
  *
  * Rate limit notes:
  *   - Authenticated primary rate limit: 5000 req/hour
