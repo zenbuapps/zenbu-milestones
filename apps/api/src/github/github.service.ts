@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
+import type { RestEndpointMethodTypes } from '@octokit/rest';
 import { RateLimitedError, UpstreamAuthError, UpstreamError } from './github.errors';
 
 /**
@@ -23,6 +24,25 @@ export interface CreateIssueParams {
 export interface CreateIssueResult {
   number: number;
   htmlUrl: string;
+}
+
+/**
+ * Octokit 原生回傳型別別名，給 dashboard service 消費。
+ * 不對外暴露 Octokit class，僅暴露 data shape，讓 service layer 與 HTTP client 解耦。
+ */
+export type OctokitRepoFromListOrg =
+  RestEndpointMethodTypes['repos']['listForOrg']['response']['data'][number];
+export type OctokitMilestone =
+  RestEndpointMethodTypes['issues']['listMilestones']['response']['data'][number];
+export type OctokitIssue =
+  RestEndpointMethodTypes['issues']['listForRepo']['response']['data'][number];
+
+/** rate-limit meta，用於 /api/health/github */
+export interface RateLimitInfo {
+  remaining: number;
+  limit: number;
+  /** ISO 8601 */
+  resetAt: string;
 }
 
 /**
@@ -145,6 +165,100 @@ export class GitHubService implements OnModuleInit {
       issue_number: issueNumber,
       labels: [SOURCE_LABEL_NAME],
     });
+  }
+
+  /**
+   * 列出指定 org 的所有 repo（自動 pagination）。
+   * Dashboard module 呼叫此 method 取代舊 fetch-data.ts 的 listAllRepos。
+   * 不在此處做 archived / fork 過濾，由 caller 決定。
+   */
+  async listReposForOrg(org: string): Promise<OctokitRepoFromListOrg[]> {
+    try {
+      return await this.octokit.paginate(this.octokit.repos.listForOrg, {
+        org,
+        type: 'all',
+        per_page: 100,
+      });
+    } catch (err) {
+      throw this.mapError(err);
+    }
+  }
+
+  /**
+   * 列出指定 repo 的所有 milestones（含 open / closed）。
+   */
+  async listRepoMilestones(
+    owner: string,
+    repo: string,
+  ): Promise<OctokitMilestone[]> {
+    try {
+      return await this.octokit.paginate(this.octokit.issues.listMilestones, {
+        owner,
+        repo,
+        state: 'all',
+        per_page: 100,
+      });
+    } catch (err) {
+      throw this.mapError(err);
+    }
+  }
+
+  /**
+   * 列出某個 milestone 底下的所有 issue。
+   * 不過濾 PR / sensitive label —— 由 caller 決定。
+   */
+  async listMilestoneIssues(
+    owner: string,
+    repo: string,
+    milestoneNumber: number,
+  ): Promise<OctokitIssue[]> {
+    try {
+      return await this.octokit.paginate(this.octokit.issues.listForRepo, {
+        owner,
+        repo,
+        milestone: String(milestoneNumber),
+        state: 'all',
+        per_page: 100,
+      });
+    } catch (err) {
+      throw this.mapError(err);
+    }
+  }
+
+  /**
+   * 列出 repo 所有 open + closed issues（不限 milestone），依 updatedAt desc。
+   * 同樣不過濾 PR / sensitive label。
+   */
+  async listAllRepoIssues(owner: string, repo: string): Promise<OctokitIssue[]> {
+    try {
+      return await this.octokit.paginate(this.octokit.issues.listForRepo, {
+        owner,
+        repo,
+        state: 'all',
+        per_page: 100,
+        sort: 'updated',
+        direction: 'desc',
+      });
+    } catch (err) {
+      throw this.mapError(err);
+    }
+  }
+
+  /**
+   * 查 PAT 的 rate-limit 餘額。
+   * /api/health/github 使用；失敗會拋 mapped error，caller 可 catch 決定怎麼回應。
+   */
+  async getRateLimit(): Promise<RateLimitInfo> {
+    try {
+      const { data } = await this.octokit.rateLimit.get();
+      return {
+        remaining: data.rate.remaining,
+        limit: data.rate.limit,
+        resetAt: new Date(data.rate.reset * 1000).toISOString(),
+      };
+    } catch (err) {
+      throw this.mapError(err);
+    }
   }
 
   /**
