@@ -25,9 +25,15 @@ export type TAppShellContext = {
   hiddenRepos: Set<string>;
   /**
    * 被管理員設為「不接受投稿」的 repo 名稱集合
-   * 未來 RoadmapPage 的「提出 Issue」按鈕可據此顯示 disabled tooltip
+   * RoadmapPage 的「提出 Issue」按鈕據此 disabled
    */
   nonSubmittableRepos: Set<string>;
+  /**
+   * 重新拉取 /api/repos/settings 並更新兩個 set。
+   * Admin 在 RepoSettingsTable toggle 完後呼叫此 callback，
+   * 可讓 Sidebar / OverviewPage / RoadmapPage 立即反映，不必 F5。
+   */
+  refreshRepoSettings: () => void;
 };
 
 /**
@@ -42,6 +48,16 @@ const AppShell = () => {
   const [nonSubmittableRepos, setNonSubmittableRepos] = useState<Set<string>>(() => new Set());
   const location = useLocation();
   const session = useSession();
+
+  // 抽出 settings 拉取，讓 admin toggle 完可重呼一次（不需 F5）
+  const refreshRepoSettings = useCallback(() => {
+    void fetchPublicRepoSettings().then((rows) => {
+      setHiddenRepos(new Set(rows.filter((r) => !r.visibleOnUI).map((r) => r.repoName)));
+      setNonSubmittableRepos(
+        new Set(rows.filter((r) => !r.canSubmitIssue).map((r) => r.repoName)),
+      );
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +133,7 @@ const AppShell = () => {
     );
   }
 
-  const context: TAppShellContext = { summary, session, hiddenRepos, nonSubmittableRepos };
+  const context: TAppShellContext = { summary, session, hiddenRepos, nonSubmittableRepos, refreshRepoSettings };
 
   return (
     <ToastProvider>

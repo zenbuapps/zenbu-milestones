@@ -13,7 +13,9 @@
 
 import { AlertTriangle, Inbox, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import type { RepoSettingsRow, UpdateRepoSettingsInput } from 'shared';
+import type { TAppShellContext } from '../../AppShell';
 import { ApiError, fetchAdminRepos, updateAdminRepoSettings } from '../../data/api';
 import { formatTimeAgo } from '../../utils/date';
 import EmptyState from '../EmptyState';
@@ -29,6 +31,9 @@ const RepoSettingsTable = () => {
   const [state, setState] = useState<TFetchState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
   const { showToast } = useToast();
+  // 取 AppShell 暴露的 refresh callback：toggle 後讓 Sidebar / OverviewPage / RoadmapPage
+  // 立即套用最新設定，不必使用者按 F5
+  const { refreshRepoSettings } = useOutletContext<TAppShellContext>();
 
   // 正在切換的 repo key（`owner/name`）—— 用於顯示 disabled + spinner
   const [pendingKeys, setPendingKeys] = useState<Set<string>>(new Set());
@@ -80,6 +85,9 @@ const RepoSettingsTable = () => {
           [field]: nextValue,
         });
         patchRow(server);
+        // 同步更新 AppShell 的 hiddenRepos / nonSubmittableRepos 集合
+        // 讓 Sidebar / RoadmapPage 即時反映 toggle
+        refreshRepoSettings();
       } catch (err) {
         // Revert
         patchRow(row);
@@ -93,7 +101,7 @@ const RepoSettingsTable = () => {
         });
       }
     },
-    [patchRow, pendingKeys, showToast],
+    [patchRow, pendingKeys, showToast, refreshRepoSettings],
   );
 
   return (

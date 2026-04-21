@@ -2,6 +2,7 @@ import {
   AlertOctagon,
   ArrowLeft,
   ExternalLink,
+  EyeOff,
   FilePlus2,
   Inbox,
   Lock,
@@ -38,7 +39,10 @@ const DEFAULT_REPO_OWNER = 'zenbuapps';
 const RoadmapPage = () => {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
-  const { session } = useOutletContext<TAppShellContext>();
+  const { session, hiddenRepos, nonSubmittableRepos } = useOutletContext<TAppShellContext>();
+  const isAdmin = session.state.status === 'authenticated' && session.state.user.role === 'admin';
+  const isHidden = name ? hiddenRepos.has(name) : false;
+  const isNonSubmittable = name ? nonSubmittableRepos.has(name) : false;
 
   const [detail, setDetail] = useState<RepoDetail | null>(null);
   const [error, setError] = useState<Error | null>(null);
@@ -92,10 +96,31 @@ const RoadmapPage = () => {
     );
   }
 
+  // Hidden repo 對非 admin 一律隱藏（即使深連結也擋掉）；admin 仍可瀏覽
+  if (isHidden && !isAdmin) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="btn-ghost mb-4 -ml-3"
+        >
+          <ArrowLeft size={15} strokeWidth={2} /> 返回總覽
+        </button>
+        <EmptyState
+          icon={EyeOff}
+          title="此 repo 目前不對外公開"
+          description="管理員尚未開放此 repo 的瀏覽，請稍後再試或聯絡管理員"
+        />
+      </>
+    );
+  }
+
   const total = detail.milestones.length;
   const closed = detail.milestones.filter((m) => m.state === 'closed').length;
   const completionPct = total === 0 ? 0 : Math.round((closed / total) * 100);
-  const canSubmitIssue = session.state.status === 'authenticated';
+  const isLoggedIn = session.state.status === 'authenticated';
+  const canSubmitIssue = isLoggedIn && !isNonSubmittable;
 
   return (
     <>
@@ -119,15 +144,27 @@ const RoadmapPage = () => {
         description={detail.description ?? undefined}
         action={
           <div className="flex flex-wrap items-center gap-2">
-            {canSubmitIssue && (
-              <button
-                type="button"
-                onClick={() => setIsDialogOpen(true)}
-                className="btn-primary"
-              >
-                <FilePlus2 size={15} strokeWidth={2} />
-                提出 Issue
-              </button>
+            {isLoggedIn && (
+              isNonSubmittable ? (
+                <button
+                  type="button"
+                  disabled
+                  className="btn-primary cursor-not-allowed opacity-50"
+                  title="管理員已關閉此 repo 的外部投稿"
+                >
+                  <FilePlus2 size={15} strokeWidth={2} />
+                  此 repo 暫不接受投稿
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsDialogOpen(true)}
+                  className="btn-primary"
+                >
+                  <FilePlus2 size={15} strokeWidth={2} />
+                  提出 Issue
+                </button>
+              )
             )}
             <a
               href={detail.htmlUrl}
@@ -141,6 +178,16 @@ const RoadmapPage = () => {
           </div>
         }
       />
+
+      {isHidden && isAdmin && (
+        <div className="card mb-4 flex items-start gap-3 border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <EyeOff size={16} strokeWidth={2} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">此 repo 已被你（管理員）設為「不顯示於 UI」</p>
+            <p className="mt-0.5 text-xs">一般訪客現在無法看到此頁；你看得到是因為你是 admin。在 #/admin?tab=repos 切回 visible。</p>
+          </div>
+        </div>
+      )}
 
       {/* 資訊列 */}
       <div className="card mb-6 grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-5 md:grid-cols-4">

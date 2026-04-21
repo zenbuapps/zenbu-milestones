@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -81,9 +82,29 @@ export class IssuesService {
     private readonly audit: AuditService,
   ) {}
 
-  /** 建立一筆 pending 狀態的 issue。 */
+  /**
+   * 建立一筆 pending 狀態的 issue。
+   *
+   * 安全：呼叫端須為已登入 user（AuthenticatedGuard 保護），
+   * 這裡再查 repo_settings.canSubmitIssue —— 防止有人繞前端 UI
+   * 對管理員關閉投稿的 repo 寫入 issue。
+   * 若 repo 尚未在 repo_settings 表（例：新 repo，fetcher 下一輪才會 upsert），
+   * 預設允許投稿（canSubmitIssue 欄位預設 true，且 fetcher 會追上）。
+   */
   // TODO(M1-extension): rate limit 3/min/user（先走 count(createdAt >= now-60s)）
   async createDraft(authorId: string, dto: CreateIssueDto): Promise<SubmittedIssueDTO> {
+    const settings = await this.prisma.repoSettings.findUnique({
+      where: {
+        repoOwner_repoName: { repoOwner: dto.repoOwner, repoName: dto.repoName },
+      },
+      select: { canSubmitIssue: true },
+    });
+    if (settings && !settings.canSubmitIssue) {
+      throw new ForbiddenException(
+        `此 repo 目前不接受外部投稿（${dto.repoOwner}/${dto.repoName}）`,
+      );
+    }
+
     const issue = await this.prisma.issue.create({
       data: {
         authorId,
