@@ -18,7 +18,7 @@ import MilestoneTimeline from '../components/MilestoneTimeline';
 import PageHeader from '../components/PageHeader';
 import RepoIssueList from '../components/RepoIssueList';
 import { loadRepoDetail } from '../data/loader';
-import type { RepoDetail } from '../data/types';
+import type { RepoDetail } from 'shared';
 import { formatDate } from '../utils/date';
 
 // TODO(M6)：repoOwner 目前固定 'zenbuapps'；fetcher 尚未抓多 org 資料，

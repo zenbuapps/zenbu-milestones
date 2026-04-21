@@ -1,6 +1,6 @@
 import { CheckCircle2, CircleDot, Inbox, Milestone as MilestoneIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import type { IssueLite, RepoDetail } from '../data/types';
+import type { IssueLite, RepoDetail } from 'shared';
 import { formatTimeAgo } from '../utils/date';
 import EmptyState from './EmptyState';
 import IssueFilterBar, {

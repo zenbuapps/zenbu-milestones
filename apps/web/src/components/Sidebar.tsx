@@ -1,7 +1,7 @@
 import { ChevronRight, ExternalLink, LayoutDashboard, Lock, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { RepoSummary, Summary } from '../data/types';
+import type { RepoSummary, Summary } from 'shared';
 
 type TSidebarProps = {
   /** 載入中時為 null */

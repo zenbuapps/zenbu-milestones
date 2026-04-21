@@ -1,4 +1,4 @@
-import type { RepoDetail, Summary } from './types';
+import type { RepoDetail, Summary } from 'shared';
 
 /**
  * 模組內快取，避免相同資源重複 fetch。

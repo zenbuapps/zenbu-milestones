@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Milestone } from '../data/types';
+import type { Milestone } from 'shared';
 import { deriveMilestoneStatus } from '../utils/progress';
 import MilestoneNode from './MilestoneNode';
 

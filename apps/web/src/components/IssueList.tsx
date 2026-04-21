@@ -1,5 +1,5 @@
 import { CheckCircle2, CircleDot } from 'lucide-react';
-import type { IssueLite } from '../data/types';
+import type { IssueLite } from 'shared';
 
 type TIssueListProps = {
   issues: IssueLite[];

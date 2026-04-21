@@ -1,6 +1,6 @@
 import { AlertTriangle, ArrowRight, Clock, ExternalLink, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import type { RepoSummary } from '../data/types';
+import type { RepoSummary } from 'shared';
 import { formatRelative } from '../utils/date';
 import ProgressBar from './ProgressBar';
 

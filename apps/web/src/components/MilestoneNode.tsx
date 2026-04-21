@@ -7,7 +7,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { Milestone, MilestoneDerivedStatus } from '../data/types';
+import type { Milestone, MilestoneDerivedStatus } from 'shared';
 import { daysUntil, formatDate, formatRelative } from '../utils/date';
 import { deriveMilestoneStatus } from '../utils/progress';
 import IssueList from './IssueList';

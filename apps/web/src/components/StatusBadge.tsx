@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, Circle, Clock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { MilestoneDerivedStatus } from '../data/types';
+import type { MilestoneDerivedStatus } from 'shared';
 
 type TStatusBadgeProps = {
   /** milestone 推導狀態 */

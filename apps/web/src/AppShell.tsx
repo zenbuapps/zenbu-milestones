@@ -8,7 +8,7 @@ import ToastProvider from './components/Toast/ToastProvider';
 import TopNav from './components/TopNav';
 import { fetchPublicRepoSettings } from './data/api';
 import { loadSummary } from './data/loader';
-import type { Summary } from './data/types';
+import type { Summary } from 'shared';
 import { useSession, type UseSessionResult } from './hooks/useSession';
 
 /**

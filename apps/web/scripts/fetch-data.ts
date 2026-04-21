@@ -27,7 +27,7 @@ import type {
   RepoSummary,
   Summary,
   Totals,
-} from '../src/data/types.ts';
+} from 'shared';
 
 const ORG = 'zenbuapps';
 const __dirname = dirname(fileURLToPath(import.meta.url));

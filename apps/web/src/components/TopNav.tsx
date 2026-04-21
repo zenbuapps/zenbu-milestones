@@ -1,5 +1,5 @@
 import { ExternalLink, LayoutDashboard, Menu } from 'lucide-react';
-import type { Summary } from '../data/types';
+import type { Summary } from 'shared';
 import type { SessionState } from '../hooks/useSession';
 import { formatRelative } from '../utils/date';
 import UserMenu from './UserMenu';

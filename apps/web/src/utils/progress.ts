@@ -1,4 +1,4 @@
-import type { Milestone, MilestoneDerivedStatus } from '../data/types';
+import type { Milestone, MilestoneDerivedStatus } from 'shared';
 import { isOverdue } from './date';
 
 /**

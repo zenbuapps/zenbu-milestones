@@ -8,7 +8,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { RepoSummary } from '../data/types';
+import type { RepoSummary } from 'shared';
 
 type TCompletionBarChartProps = {
   /** 只傳入有 milestone 的 repo */
