@@ -1,15 +1,18 @@
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, ImagePlus, Loader2 } from 'lucide-react';
 import {
   lazy,
   Suspense,
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
   type FormEvent,
 } from 'react';
 import { ISSUE_BODY_MAX, ISSUE_TITLE_MAX } from 'shared';
-import { ApiError, createIssue } from '../data/api';
+import { ApiError, createIssue, uploadImage } from '../data/api';
 import LoadingSpinner from './LoadingSpinner';
 import { useToast } from './Toast/useToast';
 
@@ -86,6 +89,10 @@ const IssueSubmitForm = ({
   const [title, setTitle] = useState('');
   const [body, setBody] = useState<string>(DEFAULT_BODY_TEMPLATE);
   const [state, setState] = useState<FormState>({ status: 'idle' });
+  // 同時上傳中的圖片數（>0 時顯示提示，不 block submit —— 上傳完前送出會留 placeholder 在 body）
+  const [uploadingCount, setUploadingCount] = useState(0);
+  // 包住 MDEditor 的 div，用來抓內部 textarea 做 cursor 操作
+  const editorWrapperRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
   const titleLen = title.length;
@@ -111,6 +118,104 @@ const IssueSubmitForm = ({
     !titleOver &&
     body.trim().length > 0 &&
     !bodyOver;
+
+  // ============================================================
+  // 圖片上傳（M5）：paste / drop image → 上傳到 Bunny → 替換成 markdown link
+  // ============================================================
+
+  /** 在當前游標位置插入文字，並把游標移到插入後的尾端 */
+  const insertAtCursor = useCallback((insertion: string) => {
+    const ta = editorWrapperRef.current?.querySelector('textarea');
+    if (!ta) {
+      // fallback：append 到尾端
+      setBody((prev) => prev + insertion);
+      return;
+    }
+    const start = ta.selectionStart ?? ta.value.length;
+    const end = ta.selectionEnd ?? ta.value.length;
+    setBody((prev) => prev.slice(0, start) + insertion + prev.slice(end));
+    // 下次 render 後把游標推到插入內容後方並維持 focus
+    requestAnimationFrame(() => {
+      const ta2 = editorWrapperRef.current?.querySelector('textarea');
+      if (ta2) {
+        const pos = start + insertion.length;
+        ta2.selectionStart = pos;
+        ta2.selectionEnd = pos;
+        ta2.focus();
+      }
+    });
+  }, []);
+
+  /** 把 body 內的某段文字一比一替換（給 placeholder → real markdown 用） */
+  const replaceInBody = useCallback((needle: string, replacement: string) => {
+    setBody((prev) => prev.split(needle).join(replacement));
+  }, []);
+
+  /** 上傳一張圖片：先插 placeholder → 上傳 → 替換成真 markdown */
+  const uploadOneImage = useCallback(
+    async (file: File) => {
+      // 用 8 字 random suffix 確保 placeholder 在 body 內 unique（避免使用者
+      // 連貼兩張一樣檔名的圖時 replace 換錯位）
+      const tag = Math.random().toString(36).slice(2, 10);
+      const displayName = file.name || `pasted-${Date.now()}.png`;
+      const placeholder = `![上傳中 ${displayName} #${tag}]()`;
+      // 前後加換行避免黏到既有文字
+      insertAtCursor(`\n${placeholder}\n`);
+      setUploadingCount((c) => c + 1);
+      try {
+        const res = await uploadImage(file, displayName);
+        replaceInBody(placeholder, `![${res.filename}](${res.url})`);
+      } catch (err) {
+        replaceInBody(placeholder, '');
+        const msg = err instanceof ApiError ? err.message : (err as Error).message;
+        showToast({ type: 'error', message: `圖片上傳失敗：${msg}` });
+      } finally {
+        setUploadingCount((c) => Math.max(0, c - 1));
+      }
+    },
+    [insertAtCursor, replaceInBody, showToast],
+  );
+
+  /** Ctrl+V / Cmd+V 截圖貼上 */
+  const handleEditorPaste = useCallback(
+    (e: ReactClipboardEvent<HTMLDivElement>) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const images: File[] = [];
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const f = item.getAsFile();
+          if (f) images.push(f);
+        }
+      }
+      if (images.length > 0) {
+        e.preventDefault();
+        images.forEach((f) => void uploadOneImage(f));
+      }
+    },
+    [uploadOneImage],
+  );
+
+  /** 從檔案總管拖一張圖進編輯器 */
+  const handleEditorDrop = useCallback(
+    (e: ReactDragEvent<HTMLDivElement>) => {
+      const files = Array.from(e.dataTransfer?.files ?? []).filter((f) =>
+        f.type.startsWith('image/'),
+      );
+      if (files.length > 0) {
+        e.preventDefault();
+        files.forEach((f) => void uploadOneImage(f));
+      }
+    },
+    [uploadOneImage],
+  );
+
+  /** drop 必須配 dragOver 阻止預設行為（不然 browser 會把圖片開成新分頁） */
+  const handleEditorDragOver = useCallback((e: ReactDragEvent<HTMLDivElement>) => {
+    if (e.dataTransfer?.types?.includes('Files')) {
+      e.preventDefault();
+    }
+  }, []);
 
   const handleSubmit = useCallback(
     async (e: FormEvent) => {
@@ -175,12 +280,22 @@ const IssueSubmitForm = ({
 
       {/* 內容 */}
       <div>
-        <label htmlFor="issue-body" className="label">
-          內容 <span className="text-[--color-error]">*</span>
-        </label>
+        <div className="flex items-baseline justify-between">
+          <label htmlFor="issue-body" className="label">
+            內容 <span className="text-[--color-error]">*</span>
+          </label>
+          <span className="inline-flex items-center gap-1 text-[11px] text-[--color-text-muted]">
+            <ImagePlus size={12} strokeWidth={2} />
+            可貼上 / 拖放圖片（≤ 10 MB，PNG / JPEG / GIF / WebP）
+          </span>
+        </div>
         <div
+          ref={editorWrapperRef}
           data-color-mode="light"
           className="overflow-hidden rounded-lg border border-[--color-border]"
+          onPaste={handleEditorPaste}
+          onDrop={handleEditorDrop}
+          onDragOver={handleEditorDragOver}
         >
           <Suspense
             fallback={
@@ -197,18 +312,28 @@ const IssueSubmitForm = ({
               preview="live"
               visibleDragbar={false}
               textareaProps={{
-                placeholder: '支援 Markdown 語法，可即時預覽',
+                placeholder: '支援 Markdown 語法，可即時預覽。截圖後 Ctrl+V 直接貼上',
                 disabled: isSubmitting,
               }}
             />
           </Suspense>
         </div>
-        <div
-          className={`mt-1 text-right text-xs ${
-            bodyOver ? 'text-[--color-error]' : 'text-[--color-text-muted]'
-          }`}
-        >
-          {bodyLen} / {ISSUE_BODY_MAX}
+        <div className="mt-1 flex items-center justify-between text-xs">
+          <span className="inline-flex items-center gap-1 text-[--color-text-muted]">
+            {uploadingCount > 0 && (
+              <>
+                <Loader2 size={12} strokeWidth={2} className="animate-spin" />
+                上傳中（{uploadingCount}）...
+              </>
+            )}
+          </span>
+          <span
+            className={
+              bodyOver ? 'text-[--color-error]' : 'text-[--color-text-muted]'
+            }
+          >
+            {bodyLen} / {ISSUE_BODY_MAX}
+          </span>
         </div>
       </div>
 

@@ -18,6 +18,7 @@ import type {
   SubmittedIssueDTO,
   UpdateRepoSettingsInput,
   UpdateUserRoleInput,
+  UploadImageResponse,
   UserRole,
 } from 'shared';
 
@@ -126,6 +127,60 @@ export async function createIssue(input: CreateIssueInput): Promise<SubmittedIss
  */
 export async function fetchMyIssues(): Promise<SubmittedIssueDTO[]> {
   return apiFetch<SubmittedIssueDTO[]>('/api/me/issues');
+}
+
+/**
+ * 上傳一張圖片到後端 → Bunny CDN，回 public URL。
+ * 用於 IssueSubmitForm 的 paste / drop image 支援。
+ *
+ * 後端：
+ *   - 必須登入（401 if not）
+ *   - MIME 白名單：image/png, image/jpeg, image/gif, image/webp
+ *   - 上限 10 MB
+ *
+ * 失敗時 throw ApiError；呼叫端負責顯示 toast / 復原 placeholder。
+ */
+export async function uploadImage(
+  file: Blob,
+  filename = 'pasted-image.png',
+): Promise<UploadImageResponse> {
+  if (!API_BASE) {
+    throw new ApiError('API_NOT_CONFIGURED', '尚未設定後端 API（VITE_API_BASE_URL）', 0);
+  }
+  const fd = new FormData();
+  fd.append('file', file, filename);
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/uploads/image`, {
+      method: 'POST',
+      credentials: 'include',
+      body: fd,
+      // 不能設 Content-Type；FormData 會自動帶 multipart boundary
+    });
+  } catch (networkErr) {
+    throw new ApiError('NETWORK_ERROR', (networkErr as Error).message || '網路錯誤', 0);
+  }
+
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    /* non-JSON */
+  }
+
+  if (!res.ok) {
+    const env = body as { success?: false; error?: { code: string; message: string }; message?: string } | null;
+    const code = env?.error?.code ?? `HTTP_${res.status}`;
+    const message = env?.error?.message ?? env?.message ?? res.statusText ?? '上傳失敗';
+    throw new ApiError(code, message, res.status);
+  }
+
+  const env = body as { success: true; data: UploadImageResponse } | null;
+  if (!env?.success || !env.data) {
+    throw new ApiError('INVALID_RESPONSE', '後端回應格式錯誤', res.status);
+  }
+  return env.data;
 }
 
 /**

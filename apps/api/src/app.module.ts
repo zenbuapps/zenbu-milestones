@@ -7,6 +7,7 @@ import { IssuesModule } from './issues/issues.module';
 import { MeModule } from './me/me.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ReposModule } from './repos/repos.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
 
 /**
@@ -40,6 +41,7 @@ import { UsersModule } from './users/users.module';
     MeModule,
     AdminModule,
     ReposModule,
+    UploadsModule,
   ],
   controllers: [HealthController],
 })

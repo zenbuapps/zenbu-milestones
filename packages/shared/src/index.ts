@@ -120,6 +120,31 @@ export interface UpdateUserRoleInput {
   role: UserRole;
 }
 
+// ===========================================================================
+// Uploads — M5
+// ===========================================================================
+
+/** 上傳圖片成功後後端回的形狀 */
+export interface UploadImageResponse {
+  /** 公開可瀏覽的 CDN URL（前端塞進 markdown 用） */
+  url: string;
+  /** 原始檔名（給 alt text 用） */
+  filename: string;
+  /** 圖片 MIME type */
+  mimeType: string;
+  /** 檔案大小（bytes） */
+  sizeBytes: number;
+}
+
+export const UPLOAD_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+export const UPLOAD_IMAGE_ALLOWED_MIME = [
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+] as const;
+export type UploadImageMime = (typeof UPLOAD_IMAGE_ALLOWED_MIME)[number];
+
 /** 稽核 log 單筆 */
 export interface AuditLogRow {
   id: string;
