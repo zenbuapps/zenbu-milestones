@@ -1,4 +1,13 @@
-import { AlertCircle, ImagePlus, Loader2, Maximize2, Minimize2 } from 'lucide-react';
+import {
+  AlertCircle,
+  Columns2,
+  Eye,
+  ImagePlus,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  Pencil,
+} from 'lucide-react';
 import {
   lazy,
   Suspense,
@@ -10,6 +19,7 @@ import {
   type ClipboardEvent as ReactClipboardEvent,
   type DragEvent as ReactDragEvent,
   type FormEvent,
+  type ReactNode,
 } from 'react';
 import { ISSUE_BODY_MAX, ISSUE_TITLE_MAX } from 'shared';
 import { ApiError, createIssue, uploadImage } from '../data/api';
@@ -95,6 +105,9 @@ const IssueSubmitForm = ({
   const editorWrapperRef = useRef<HTMLDivElement>(null);
   // 「獨立全螢幕」state：比 MDEditor 內建那個小按鈕更顯眼，給需要長篇編輯的場景
   const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
+  // 預覽模式：edit = 只編輯 / live = 分屏（預設）/ preview = 只預覽
+  // 我們自己做 segmented control，搭 CSS 隱藏 MDEditor 原生 toolbar 右側那組
+  const [previewMode, setPreviewMode] = useState<'edit' | 'live' | 'preview'>('live');
   // fullscreen 時編輯器高度綁 window.innerHeight；非 fullscreen 固定 320px
   const [editorHeight, setEditorHeight] = useState(320);
   const { showToast } = useToast();
@@ -320,15 +333,45 @@ const IssueSubmitForm = ({
 
       {/* 內容 */}
       <div>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <label htmlFor="issue-body" className="label">
             內容 <span className="text-[--color-error]">*</span>
           </label>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <span className="inline-flex items-center gap-1 text-[11px] text-[--color-text-muted]">
               <ImagePlus size={12} strokeWidth={2} />
               可貼上 / 拖放圖片
             </span>
+
+            {/* 預覽模式 segmented control（取代 MDEditor 原生那組小 icon） */}
+            <div
+              role="radiogroup"
+              aria-label="預覽模式"
+              className="inline-flex overflow-hidden rounded-md border border-[--color-border] text-xs"
+            >
+              <SegBtn
+                active={previewMode === 'edit'}
+                onClick={() => setPreviewMode('edit')}
+                icon={<Pencil size={12} strokeWidth={2} />}
+                label="編輯"
+                title="只顯示編輯器（隱藏預覽）"
+              />
+              <SegBtn
+                active={previewMode === 'live'}
+                onClick={() => setPreviewMode('live')}
+                icon={<Columns2 size={12} strokeWidth={2} />}
+                label="分屏"
+                title="編輯 + 即時預覽"
+              />
+              <SegBtn
+                active={previewMode === 'preview'}
+                onClick={() => setPreviewMode('preview')}
+                icon={<Eye size={12} strokeWidth={2} />}
+                label="預覽"
+                title="只顯示預覽（隱藏編輯器）"
+              />
+            </div>
+
             <button
               type="button"
               onClick={() => setIsEditorFullscreen((v) => !v)}
@@ -387,7 +430,7 @@ const IssueSubmitForm = ({
                 value={body}
                 onChange={(v) => setBody(v ?? '')}
                 height={editorHeight}
-                preview="live"
+                preview={previewMode}
                 visibleDragbar={false}
                 textareaProps={{
                   placeholder: '支援 Markdown 語法，可即時預覽。截圖後 Ctrl+V 直接貼上',
@@ -491,5 +534,36 @@ function deriveFormError(err: unknown): FormError {
   }
   return { message: `建立失敗：${err.message}（稍後重試）` };
 }
+
+/** 預覽模式 segmented control 單格。active 時用 brand 色填滿。 */
+const SegBtn = ({
+  active,
+  onClick,
+  icon,
+  label,
+  title,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: ReactNode;
+  label: string;
+  title: string;
+}) => (
+  <button
+    type="button"
+    role="radio"
+    aria-checked={active}
+    onClick={onClick}
+    title={title}
+    className={`inline-flex items-center gap-1 px-2 py-1 transition-colors ${
+      active
+        ? 'bg-[--color-brand] text-white'
+        : 'bg-white text-[--color-text-muted] hover:bg-[--color-surface-overlay]'
+    }`}
+  >
+    {icon}
+    {label}
+  </button>
+);
 
 export default IssueSubmitForm;

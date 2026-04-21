@@ -108,3 +108,15 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);
 }
+
+/* ============================================================================
+ * MDEditor toolbar 客製
+ * ----------------------------------------------------------------------------
+ * 我們自己做了預覽模式 segmented control（IssueSubmitForm 裡的 SegBtn），
+ * 因此隱藏 @uiw/react-md-editor 原生 toolbar 右側那組按鈕（edit/live/preview
+ * + fullscreen 小圖示），避免兩套 UI 並存造成視覺混亂。
+ * 全螢幕改由 IssueSubmitForm 自己的按鈕觸發。
+ * ============================================================================ */
+.w-md-editor-toolbar > ul:nth-child(2) {
+  display: none !important;
+}
