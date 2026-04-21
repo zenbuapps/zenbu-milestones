@@ -22,9 +22,9 @@ import { ApiError, fetchRepoDetail } from '../data/api';
 import type { RepoDetail } from 'shared';
 import { formatDate } from '../utils/date';
 
-// TODO(M6)：repoOwner 目前固定 'zenbuapps'；fetcher 尚未抓多 org 資料，
-// types.ts 的 RepoDetail 也沒有 owner 欄位。當未來真正支援跨 org 時，
-// 需同步：scripts/fetch-data.ts 產出 owner、types.ts 新增 owner、此處改讀 detail.owner。
+// TODO(M6)：repoOwner 目前固定 'zenbuapps'；後端 DashboardService 尚未抓多 org 資料，
+// shared 的 RepoDetail 也沒有 owner 欄位。當未來真正支援跨 org 時，
+// 需同步：DashboardService 產出 owner、packages/shared 新增 owner 欄位、此處改讀 detail.owner。
 const DEFAULT_REPO_OWNER = 'zenbuapps';
 
 /**

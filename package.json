@@ -14,7 +14,6 @@
     "build:api": "pnpm --filter api build",
     "preview": "pnpm --filter web preview",
     "typecheck": "pnpm -r run typecheck",
-    "fetch-data": "pnpm --filter web fetch-data",
     "prisma:migrate:dev": "pnpm --filter api prisma:migrate:dev",
     "prisma:generate": "pnpm --filter api prisma:generate"
   },

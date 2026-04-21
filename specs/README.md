@@ -7,7 +7,7 @@
 | 檔案 / 目錄 | 範疇 | 讀者 |
 |---|---|---|
 | `data-pipeline.md` | 舊靜態資料管線（build-time fetcher + runtime loader）的契約，過渡期仍在運作 | 做架構變更的 AI agent / 人類 |
-| `json-schema.md` | `public/data/*.json` 的實際 JSON 形狀（以 `apps/web/src/data/types.ts` 為單一事實來源）| 消費端開發者、除錯時對照 |
+| `json-schema.md` | Dashboard endpoints 回傳 JSON 的邊界與語意說明（以 `packages/shared/src/index.ts` 為單一事實來源）| 消費端開發者、除錯時對照 |
 | `information-architecture.md` | 頁面資訊架構與使用者旅程（Overview → Repo Roadmap）| 新增頁面 / 重組 navigation 前 |
 | `api/api.yml` | 後端 NestJS REST API 規格（OpenAPI）| 動後端 endpoint / 前端 API client 前 |
 | `activities/` | 業務活動建模 | 設計新流程前 |

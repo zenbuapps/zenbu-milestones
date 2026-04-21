@@ -40,19 +40,11 @@ corepack enable && corepack prepare pnpm@10.32.1 --activate
 
 開發時記得：動過 `packages/shared` 的程式碼，要跑 `pnpm build:shared`（或 `pnpm dev:shared` 開 watch），下游 workspace 才拿得到新型別。
 
-### 3. Build-time fetch 的環境變數（過渡期）
+### 3. 後端呼叫 GitHub 的環境變數
 
-> **注意**：`apps/web/scripts/fetch-data.ts` 是舊靜態管線的產物，隨著前端切 API 即將退役。以下規範僅供過渡期本地除錯使用。
+後端 `apps/api` 用 `ZENBU_ORG_WRITE_TOKEN`（fine-grained PAT）呼叫 GitHub REST API，支援 issue 提交轉送與 dashboard 資料抓取。PAT 權限：Contents / Issues / Metadata（Read + Write）。token 放 repo 根的 `.env`，NestJS 用 `@nestjs/config` 讀取。
 
-`scripts/fetch-data.ts` 需要環境變數：
-
-| 變數 | 用途 | 設法 |
-|---|---|---|
-| `GH_TOKEN` | GitHub PAT（讀 org 資料）| 手動 export 或放 `.env` |
-
-本地執行：`GH_TOKEN=ghp_xxx pnpm fetch-data`（bash）或 `$env:GH_TOKEN="ghp_xxx"; pnpm fetch-data`（PowerShell）。
-
-PAT 權限最小化：fine-grained PAT 對 `zenbuapps` 組織的 Contents / Issues / Metadata 唯讀。**禁止** 使用 classic PAT 或任何帶 write 權限的 token。
+**禁止** 使用 classic PAT。Token 洩漏時到 GitHub 撤銷並重新簽發。
 
 ---
 
@@ -81,14 +73,14 @@ pnpm build:shared
 pnpm dev:shared
 ```
 
-### 錯誤：前端 fetch-data 抓到的 issue / milestone 比實際少
+### 錯誤：後端 `/api/summary` 抓到的 issue / milestone 比實際少
 
 **可能原因**：
-1. `p-limit` 太高 → 觸發 secondary rate limit → 部分請求靜靜失敗
-2. PAT 缺權限 → 看不到 private repo 的 issue
+1. `createLimiter` 太高 → 觸發 GitHub secondary rate limit → 部分請求靜靜失敗
+2. `ZENBU_ORG_WRITE_TOKEN` 缺權限 → 看不到 private repo 的 issue
 3. `SENSITIVE_LABELS` 誤排除
 
-**除錯順序**：看 console 有無 `✗ {repo} FAILED`（fetch-data 的錯誤處理會 rethrow）、手動測 PAT 權限、檢查 label 設定。
+**除錯順序**：看 api 的 console log、打 `GET /api/health/github` 看 PAT 狀況與 rate limit 剩餘、檢查 `DashboardService.SENSITIVE_LABELS` 設定、打 `POST /api/admin/refresh-data` 清 cache 重抓。
 
 ---
 
