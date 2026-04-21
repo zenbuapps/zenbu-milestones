@@ -16,6 +16,7 @@
 
 import { Octokit } from '@octokit/rest';
 import pLimit from 'p-limit';
+import pg from 'pg';
 import { mkdir, writeFile, rm } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -124,17 +125,15 @@ async function listRepoMilestones(repo: string): Promise<
   }));
 }
 
-async function listMilestoneIssues(repo: string, milestoneNumber: number): Promise<IssueLite[]> {
-  const issues = await octokit.paginate(octokit.issues.listForRepo, {
-    owner: ORG,
-    repo,
-    milestone: String(milestoneNumber),
-    state: 'all',
-    per_page: 100,
-  });
+/**
+ * 轉換 GitHub issue raw payload → IssueLite。
+ * 排除 PR 與 SENSITIVE_LABELS。
+ */
+type GitHubIssue = Awaited<ReturnType<typeof octokit.issues.listForRepo>>['data'][number];
 
+function toIssueLite(issues: GitHubIssue[]): IssueLite[] {
   return issues
-    .filter((i) => !i.pull_request) // exclude PRs (GitHub returns PRs via issues endpoint)
+    .filter((i) => !i.pull_request)
     .filter((i) => {
       const labels = (i.labels ?? [])
         .map((l) => (typeof l === 'string' ? l : (l.name ?? '')).toLowerCase())
@@ -156,6 +155,34 @@ async function listMilestoneIssues(repo: string, milestoneNumber: number): Promi
     }));
 }
 
+async function listMilestoneIssues(repo: string, milestoneNumber: number): Promise<IssueLite[]> {
+  const issues = await octokit.paginate(octokit.issues.listForRepo, {
+    owner: ORG,
+    repo,
+    milestone: String(milestoneNumber),
+    state: 'all',
+    per_page: 100,
+  });
+  return toIssueLite(issues);
+}
+
+/**
+ * 抓 repo 所有 open + closed issues（M6）。
+ * 不帶 milestone 參數 → GitHub 回全部 issues（含 milestone 內 / 外）。
+ * 排序依 updatedAt desc（GitHub 預設即為此）。
+ */
+async function listAllRepoIssues(repo: string): Promise<IssueLite[]> {
+  const issues = await octokit.paginate(octokit.issues.listForRepo, {
+    owner: ORG,
+    repo,
+    state: 'all',
+    per_page: 100,
+    sort: 'updated',
+    direction: 'desc',
+  });
+  return toIssueLite(issues);
+}
+
 function computeCompletion(open: number, closed: number): number {
   const total = open + closed;
   if (total === 0) return 0;
@@ -172,7 +199,12 @@ async function buildRepoDetail(repoMeta: Awaited<ReturnType<typeof listAllRepos>
   summary: RepoSummary;
 }> {
   const repo = repoMeta.name;
-  const milestones = await listRepoMilestones(repo);
+
+  // 平行抓 milestones meta + repo 全部 issues（M6 新增 allIssues）
+  const [milestones, allIssues] = await Promise.all([
+    listRepoMilestones(repo),
+    issueLimit(() => listAllRepoIssues(repo)),
+  ]);
 
   // Fetch issues for each milestone with limited concurrency
   const milestonesWithIssues: Milestone[] = await Promise.all(
@@ -206,6 +238,7 @@ async function buildRepoDetail(repoMeta: Awaited<ReturnType<typeof listAllRepos>
     language: repoMeta.language,
     updatedAt: repoMeta.updated_at,
     milestones: milestonesWithIssues,
+    allIssues,
   };
 
   // Compute repo-level summary
@@ -248,9 +281,10 @@ async function buildRepoDetail(repoMeta: Awaited<ReturnType<typeof listAllRepos>
 async function main(): Promise<void> {
   const start = Date.now();
 
-  // Clear previous output
+  // Clear previous output (保留 .gitkeep 以維持目錄在 repo 中的存在)
   await rm(OUT_DIR, { recursive: true, force: true });
   await mkdir(resolve(OUT_DIR, 'repos'), { recursive: true });
+  await writeFile(resolve(OUT_DIR, '.gitkeep'), '', 'utf8');
 
   const repos = await listAllRepos();
 
@@ -270,10 +304,11 @@ async function main(): Promise<void> {
     ),
   );
 
-  // Write per-repo files only when a repo has at least one milestone
+  // Write per-repo files whenever a repo has milestones OR issues
+  // （M6 擴張：沒 milestone 但有 issue 的 repo 也要有 detail 檔，才能給 RepoIssueList 使用）
   await Promise.all(
     results
-      .filter((r) => r.detail.milestones.length > 0)
+      .filter((r) => r.detail.milestones.length > 0 || r.detail.allIssues.length > 0)
       .map((r) =>
         writeFile(
           resolve(OUT_DIR, 'repos', `${r.detail.name}.json`),
@@ -317,12 +352,94 @@ async function main(): Promise<void> {
   // Also write a flat repos.json for convenience (same as summary.repos but standalone)
   await writeFile(resolve(OUT_DIR, 'repos.json'), JSON.stringify(allRepoSummaries, null, 2), 'utf8');
 
+  // Upsert repo_settings（plan §4.6-2）
+  //   - DATABASE_URL 未設時 graceful skip（本地 dev 或 CI 沒配 DB 不算錯）
+  //   - 只 insert 不存在的 repo（不覆蓋管理員已調整的設定）
+  //   - 預設 canSubmitIssue = true；visibleOnUI 跟隨 repo 是否公開（private 預設隱藏）
+  await upsertRepoSettings(repos);
+
   const duration = ((Date.now() - start) / 1000).toFixed(1);
   log(`done in ${duration}s.`);
   log(`  total repos: ${totals.allRepos} (active: ${totals.repos})`);
   log(`  milestones: ${totals.milestones} (open: ${totals.openMilestones}, overdue: ${totals.overdueMilestones})`);
   log(`  issues: open=${totals.openIssues}, closed=${totals.closedIssues}`);
   log(`  output: ${OUT_DIR}`);
+}
+
+/**
+ * 將 fetched repo 清單同步到後端 DB 的 repo_settings 表。
+ *
+ * 行為（desired state reconciliation，但僅補缺）：
+ *   - 不存在 → insert 預設 { canSubmitIssue: true, visibleOnUI: !private }
+ *   - 已存在 → **不動**（避免覆蓋管理員在 admin 介面調整過的設定）
+ *
+ * 使用 INSERT ... ON CONFLICT DO NOTHING 達成 idempotent 行為。
+ * 不依賴 Prisma client，避免 fetcher 被 ORM 生成流程綁定；raw SQL 對 schema 變更敏感但
+ * repo_settings 欄位穩定（admin migration 驅動）。
+ */
+async function upsertRepoSettings(
+  repos: Awaited<ReturnType<typeof listAllRepos>>,
+): Promise<void> {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    log('DATABASE_URL 未設定，跳過 repo_settings upsert（這在 CI 未配 DB 時為預期行為）');
+    return;
+  }
+
+  const client = new pg.Client({ connectionString: databaseUrl });
+  try {
+    await client.connect();
+  } catch (e) {
+    log(`  ✗ DB 連線失敗：${(e as Error).message}（跳過 upsert，不影響 JSON 產出）`);
+    return;
+  }
+
+  try {
+    // 一次大批量 INSERT 用參數化 query，ON CONFLICT 走 (repoOwner, repoName) 的 @@unique
+    const values: string[] = [];
+    const params: (string | boolean)[] = [];
+    let idx = 1;
+    for (const r of repos) {
+      values.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+      params.push(
+        ORG,
+        r.name,
+        true, // canSubmitIssue 預設允許投稿；admin 可關閉
+        !r.private, // visibleOnUI 跟隨是否公開
+      );
+    }
+    if (values.length === 0) {
+      log('  無 repo 需要 upsert');
+      return;
+    }
+
+    // Prisma @@unique([repoOwner, repoName]) 會產生 `repo_settings_repoOwner_repoName_key` 這種名稱
+    // 為避免依賴 index 名，改用 ON CONFLICT 指定欄位組合
+    // 明確 cast 每個 column：VALUES 子句從參數推導型別時會退回 text，
+    // 直接塞進 boolean 欄位會爆 type mismatch。
+    const sql = `
+      INSERT INTO repo_settings (id, "repoOwner", "repoName", "canSubmitIssue", "visibleOnUI", "updatedAt", "createdAt")
+      SELECT
+        gen_random_uuid(),
+        (t.owner)::text,
+        (t.name)::text,
+        (t.can_submit)::boolean,
+        (t.visible)::boolean,
+        now(),
+        now()
+      FROM (VALUES ${values.join(', ')}) AS t(owner, name, can_submit, visible)
+      ON CONFLICT ("repoOwner", "repoName") DO NOTHING
+      RETURNING "repoName";
+    `;
+
+    const res = await client.query<{ repoName: string }>(sql, params);
+    const inserted = res.rowCount ?? 0;
+    log(`  ✓ repo_settings upserted: ${inserted} new / ${repos.length - inserted} existing`);
+  } catch (e) {
+    log(`  ✗ upsert 失敗：${(e as Error).message}（不中斷 fetcher）`);
+  } finally {
+    await client.end().catch(() => undefined);
+  }
 }
 
 main().catch((e) => {

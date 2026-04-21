@@ -15,6 +15,7 @@ import IssueSubmitForm from '../components/IssueSubmitForm';
 import LoadingSpinner from '../components/LoadingSpinner';
 import MilestoneTimeline from '../components/MilestoneTimeline';
 import PageHeader from '../components/PageHeader';
+import RepoIssueList from '../components/RepoIssueList';
 import { loadRepoDetail } from '../data/loader';
 import type { RepoDetail } from '../data/types';
 import { formatDate } from '../utils/date';
@@ -158,6 +159,8 @@ const RoadmapPage = () => {
       ) : (
         <MilestoneTimeline milestones={detail.milestones} />
       )}
+
+      {detail.allIssues.length > 0 && <RepoIssueList detail={detail} />}
 
       {/* Issue 提交對話框：只在有 repo name 且已登入時 mount，避免干擾 hook 順序 */}
       {canSubmitIssue && name && (

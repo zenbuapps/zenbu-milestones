@@ -48,6 +48,9 @@ jobs:
       - name: Fetch zenbuapps org data
         env:
           GH_TOKEN: ${{ secrets.ZENBU_ORG_READ_TOKEN }}
+          # DATABASE_URL 未設時 fetcher graceful skip repo_settings upsert；
+          # 後端部署到 Railway / Render 後在此補 secret。
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::error::ZENBU_ORG_READ_TOKEN secret is not set. Create a Fine-grained PAT with read access to zenbuapps org (contents/issues/metadata) and add it as a repo secret."

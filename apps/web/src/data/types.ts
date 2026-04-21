@@ -82,4 +82,11 @@ export interface RepoDetail {
   language: string | null;
   updatedAt: string;
   milestones: Milestone[];
+  /**
+   * 該 repo 全部 open + closed issues（不限 milestone）。M6 新增。
+   * 排除 PR 與 SENSITIVE_LABELS 的 issue。依 updatedAt desc 排序。
+   * - 與 `milestones[].issues` 可能有重疊（同一 issue 若有 milestone 會兩邊都出現）
+   * - 消費端（RepoIssueList）獨立呈現，不與 milestone 視圖混用
+   */
+  allIssues: IssueLite[];
 }
