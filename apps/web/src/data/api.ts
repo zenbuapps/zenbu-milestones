@@ -7,19 +7,25 @@
  * - 回傳 shape 統一為 `{ success: true, data: T }` 或 `{ success: false, error: { code, message } }`
  */
 
-import type {
-  AdminIssueRow,
-  AdminUserRow,
-  AuditLogRow,
-  IssueStatus,
-  PublicRepoSettingsRow,
-  RejectIssueInput,
-  RepoSettingsRow,
-  SubmittedIssueDTO,
-  UpdateRepoSettingsInput,
-  UpdateUserRoleInput,
-  UploadImageResponse,
-  UserRole,
+import {
+  API_PATHS,
+  type AdminIssueRow,
+  type AdminUserRow,
+  type AuditLogRow,
+  type GithubHealthStatus,
+  type IssueStatus,
+  type MilestoneIssuesPage,
+  type PublicRepoSettingsRow,
+  type RefreshDataResult,
+  type RejectIssueInput,
+  type RepoDetail,
+  type RepoSettingsRow,
+  type SubmittedIssueDTO,
+  type Summary,
+  type UpdateRepoSettingsInput,
+  type UpdateUserRoleInput,
+  type UploadImageResponse,
+  type UserRole,
 } from 'shared';
 
 export class ApiError extends Error {
@@ -345,4 +351,84 @@ export async function updateAdminUserRole(id: string, role: UserRole): Promise<A
 export async function fetchAuditLogs(limit: number = 50): Promise<AuditLogRow[]> {
   const query = `?limit=${encodeURIComponent(String(limit))}`;
   return apiFetch<AuditLogRow[]>(`/api/admin/audit-logs${query}`);
+}
+
+// ===========================================================================
+// Dashboard data (Phase 2)
+// ===========================================================================
+// 這組 endpoint 取代 build-time 產出的 public/data/*.json，全部走 runtime API。
+// 認證行為：
+//   - summary / repoDetail / milestoneIssues → 登入必要（未登入回 401）
+//   - adminRefresh → admin only（未登入 401 / 非 admin 403 / 太頻繁 429）
+//   - githubHealth → 公開（無需登入）
+// 所有 endpoint 都沿用 apiFetch 的 envelope 處理（`{ success, data }` → 直接 unwrap
+// 回 data；health 無 envelope 時走末尾 fallback 直接回 body）。
+
+/**
+ * 取得所有 repo 的 milestone / issue 總覽（Phase 2 取代 summary.json）。
+ * 未登入 → throw ApiError{httpStatus:401}；呼叫端可據此呈現 RequireAuthGate。
+ */
+export async function fetchSummary(): Promise<Summary> {
+  return apiFetch<Summary>(API_PATHS.summary);
+}
+
+/**
+ * 取得單一 repo 的完整 milestone / issue detail（Phase 2 取代 repos/{name}.json）。
+ * 未登入 → throw ApiError{httpStatus:401}。
+ */
+export async function fetchRepoDetail(
+  owner: string,
+  name: string,
+): Promise<RepoDetail> {
+  return apiFetch<RepoDetail>(API_PATHS.repoDetail(owner, name));
+}
+
+/** fetchMilestoneIssues 的可選參數 */
+export interface FetchMilestoneIssuesOptions {
+  /** 1-indexed 頁碼，預設由後端決定（目前為 1） */
+  page?: number;
+  /** 每頁筆數，預設由後端決定（目前為 50） */
+  perPage?: number;
+}
+
+/**
+ * 取得某個 milestone 的 issue 分頁（大型 milestone 的 fallback）。
+ * 小型 milestone 可直接讀 RepoDetail.milestones[].issues，不必呼叫此 endpoint。
+ */
+export async function fetchMilestoneIssues(
+  owner: string,
+  name: string,
+  milestoneNumber: number,
+  opts?: FetchMilestoneIssuesOptions,
+): Promise<MilestoneIssuesPage> {
+  const params = new URLSearchParams();
+  if (opts?.page !== undefined) params.set('page', String(opts.page));
+  if (opts?.perPage !== undefined) params.set('perPage', String(opts.perPage));
+  const query = params.toString();
+  const base = API_PATHS.milestoneIssues(owner, name, milestoneNumber);
+  const path = query ? `${base}?${query}` : base;
+  return apiFetch<MilestoneIssuesPage>(path);
+}
+
+/**
+ * 管理員手動清除 dashboard cache（下次 GET 會重新打 GitHub）。
+ *
+ * 特殊錯誤碼：
+ * - 401 未登入
+ * - 403 非 admin
+ * - 429 操作太頻繁（10 秒冷卻中）— 呼叫端應顯示提示
+ */
+export async function refreshAdminData(): Promise<RefreshDataResult> {
+  return apiFetch<RefreshDataResult>(API_PATHS.adminRefresh, {
+    method: 'POST',
+  });
+}
+
+/**
+ * 檢查後端 GitHub PAT 健康狀態（公開 endpoint，不需登入）。
+ * 即使後端失敗仍回 HTTP 200，`ok=false` 才代表有問題 —— 呼叫端自行 branch。
+ * 後端直接回 body（無 envelope），apiFetch 末尾 fallback 會正確 pass-through。
+ */
+export async function fetchGithubHealth(): Promise<GithubHealthStatus> {
+  return apiFetch<GithubHealthStatus>(API_PATHS.githubHealth);
 }

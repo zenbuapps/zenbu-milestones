@@ -17,7 +17,8 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import MilestoneTimeline from '../components/MilestoneTimeline';
 import PageHeader from '../components/PageHeader';
 import RepoIssueList from '../components/RepoIssueList';
-import { loadRepoDetail } from '../data/loader';
+import RequireAuthGate from '../components/RequireAuthGate';
+import { ApiError, fetchRepoDetail } from '../data/api';
 import type { RepoDetail } from 'shared';
 import { formatDate } from '../utils/date';
 
@@ -46,28 +47,54 @@ const RoadmapPage = () => {
 
   const [detail, setDetail] = useState<RepoDetail | null>(null);
   const [error, setError] = useState<Error | null>(null);
+  /** 後端明確告知需要登入（HTTP 401）；與一般錯誤分流 */
+  const [needsAuth, setNeedsAuth] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFormDirty, setIsFormDirty] = useState(false);
+
+  const sessionStatus = session.state.status;
 
   useEffect(() => {
     if (!name) {
       setError(new Error('缺少 repo 名稱參數'));
       return;
     }
+    // Session 尚在 loading 時先等一下再打，避免先打一次 401 閃個 gate 又覆蓋
+    if (sessionStatus === 'loading') {
+      return;
+    }
+    // 明確未登入：直接掛 gate，不打 API（同 AppShell 策略）
+    if (sessionStatus === 'unauthenticated') {
+      setDetail(null);
+      setError(null);
+      setNeedsAuth(true);
+      return;
+    }
+
     let cancelled = false;
     setDetail(null);
     setError(null);
-    loadRepoDetail(name)
+    setNeedsAuth(false);
+    fetchRepoDetail(DEFAULT_REPO_OWNER, name)
       .then((data) => {
         if (!cancelled) setDetail(data);
       })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        if (err instanceof ApiError && err.httpStatus === 401) {
+          setNeedsAuth(true);
+          return;
+        }
+        setError(err instanceof Error ? err : new Error(String(err)));
       });
     return () => {
       cancelled = true;
     };
-  }, [name]);
+  }, [name, sessionStatus]);
+
+  if (needsAuth) {
+    return <RequireAuthGate onLogin={session.login} />;
+  }
 
   if (error) {
     return (

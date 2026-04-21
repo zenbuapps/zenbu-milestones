@@ -22,8 +22,8 @@
  * - 切 tab 時用 setSearchParams 不會觸發頁面重載、只更新 hash
  */
 
-import { AlertOctagon, Inbox, LogIn, Settings, ShieldAlert, Users } from 'lucide-react';
-import { useMemo } from 'react';
+import { AlertOctagon, Inbox, LogIn, RefreshCw, Settings, ShieldAlert, Users } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useOutletContext, useSearchParams } from 'react-router-dom';
 import type { TAppShellContext } from '../AppShell';
 import EmptyState from '../components/EmptyState';
@@ -32,6 +32,8 @@ import PageHeader from '../components/PageHeader';
 import IssueReviewTable from '../components/admin/IssueReviewTable';
 import RepoSettingsTable from '../components/admin/RepoSettingsTable';
 import UserRoleTable from '../components/admin/UserRoleTable';
+import { useToast } from '../components/Toast/useToast';
+import { ApiError, refreshAdminData } from '../data/api';
 
 /** 可用分頁識別 */
 type TAdminTab = 'issues' | 'repos' | 'users';
@@ -126,6 +128,7 @@ const AdminPanel = ({ tab, onTabChange }: TAdminPanelProps) => {
       <PageHeader
         title="管理員後台"
         description="審核 issue 草稿、控制 repo 投稿設定、管理使用者權限"
+        action={<RefreshDataButton />}
       />
 
       {/* Tab bar */}
@@ -164,6 +167,66 @@ const AdminPanel = ({ tab, onTabChange }: TAdminPanelProps) => {
         {tab === 'users' && <UserRoleTable key="users" />}
       </div>
     </div>
+  );
+};
+
+// ===========================================================================
+// RefreshDataButton — 手動重新同步 GitHub 資料（清 dashboard cache）
+// ===========================================================================
+
+/**
+ * 「手動重新同步 GitHub 資料」按鈕
+ * ---------------------------------------------------------------
+ * 呼叫 POST /api/admin/refresh-data 清除後端 dashboard cache，
+ * 下一次 /api/summary / /api/repos/... GET 會重新打 GitHub 取得最新資料。
+ *
+ * 後端有 10 秒 debounce：太頻繁點擊會回 HTTP 429；此處轉譯為友善文案。
+ * 其他錯誤（401 / 403 / 500）直接顯示後端回的 message。
+ */
+const RefreshDataButton = () => {
+  const { showToast } = useToast();
+  const [isPending, setIsPending] = useState(false);
+
+  const handleClick = useCallback(async () => {
+    if (isPending) return;
+    setIsPending(true);
+    try {
+      await refreshAdminData();
+      showToast({
+        type: 'success',
+        message: '已清除快取，下次載入會重新抓取最新資料',
+      });
+    } catch (err) {
+      if (err instanceof ApiError && err.httpStatus === 429) {
+        showToast({
+          type: 'error',
+          message: '操作太頻繁，請 10 秒後再試',
+        });
+      } else {
+        const message =
+          err instanceof Error ? err.message : '手動同步失敗，請稍後再試';
+        showToast({ type: 'error', message });
+      }
+    } finally {
+      setIsPending(false);
+    }
+  }, [isPending, showToast]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={isPending}
+      className="btn-secondary"
+      title="清除 dashboard cache，下次載入時會重新從 GitHub 抓取資料"
+    >
+      <RefreshCw
+        size={15}
+        strokeWidth={2}
+        className={isPending ? 'animate-spin' : undefined}
+      />
+      {isPending ? '同步中...' : '手動重新同步 GitHub 資料'}
+    </button>
   );
 };
 
