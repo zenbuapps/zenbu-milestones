@@ -1,0 +1,122 @@
+// Prisma Schema — zenbu-milestones 後端資料模型
+// ---------------------------------------------------------------
+// 所有對外（API / SPA）的型別由 packages/shared/src/index.ts 維護；
+// 此檔是資料庫層級的真實來源。兩端若有差異（例如 `synced_to_github`
+// vs `synced-to-github`），在 Service 層以 helper function 做轉換。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  user
+  admin
+}
+
+enum IssueStatus {
+  pending
+  approved
+  rejected
+  synced_to_github
+}
+
+enum AttachmentKind {
+  image
+  video
+  other
+}
+
+model User {
+  id          String   @id @default(uuid())
+  googleSub   String   @unique
+  email       String   @unique
+  displayName String
+  avatarUrl   String?
+  role        UserRole @default(user)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  issuesAuthored      Issue[]        @relation("IssueAuthor")
+  issuesReviewed      Issue[]        @relation("IssueReviewer")
+  repoSettingsUpdated RepoSettings[]
+  auditLogs           AuditLog[]
+
+  @@map("users")
+}
+
+model Issue {
+  id                String      @id @default(uuid())
+  authorId          String
+  author            User        @relation("IssueAuthor", fields: [authorId], references: [id])
+  repoOwner         String
+  repoName          String
+  title             String      @db.VarChar(256)
+  bodyMarkdown      String      @db.Text
+  status            IssueStatus @default(pending)
+  githubIssueNumber Int?
+  githubIssueUrl    String?
+  reviewedById      String?
+  reviewedBy        User?       @relation("IssueReviewer", fields: [reviewedById], references: [id])
+  reviewedAt        DateTime?
+  rejectReason      String?     @db.Text
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  attachments IssueAttachment[]
+
+  @@index([authorId, createdAt])
+  @@index([status, createdAt])
+  @@index([repoOwner, repoName])
+  @@map("issues")
+}
+
+model IssueAttachment {
+  id        String         @id @default(uuid())
+  issueId   String
+  issue     Issue          @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  kind      AttachmentKind
+  url       String
+  filename  String
+  sizeBytes Int
+  createdAt DateTime       @default(now())
+
+  @@index([issueId])
+  @@map("issue_attachments")
+}
+
+model RepoSettings {
+  id             String   @id @default(uuid())
+  repoOwner      String
+  repoName       String
+  canSubmitIssue Boolean  @default(true)
+  visibleOnUI    Boolean  @default(true)
+  updatedById    String?
+  updatedBy      User?    @relation(fields: [updatedById], references: [id])
+  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now())
+
+  @@unique([repoOwner, repoName])
+  @@map("repo_settings")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String
+  actor      User     @relation(fields: [actorId], references: [id])
+  // 'role.grant' | 'role.revoke' | 'repo.update' | 'issue.approve' | 'issue.reject'
+  action     String
+  // 'user' | 'repo' | 'issue'
+  targetType String
+  targetId   String
+  payload    Json
+  createdAt  DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}

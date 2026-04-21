@@ -1,40 +1,33 @@
 {
-  "name": "zenbu-milestones",
+  "name": "zenbu-milestones-monorepo",
   "private": true,
-  "version": "0.1.0",
-  "type": "module",
+  "version": "0.2.0",
   "packageManager": "pnpm@10.32.1",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "fetch-data": "tsx scripts/fetch-data.ts",
-    "typecheck": "tsc -b --noEmit"
-  },
-  "dependencies": {
-    "lucide-react": "^0.500.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
-    "recharts": "^2.13.3"
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "dev:shared": "pnpm --filter shared dev",
+    "dev:all": "pnpm -r --parallel run dev",
+    "build": "pnpm --filter shared build && pnpm -r --filter \"!shared\" run build",
+    "build:shared": "pnpm --filter shared build",
+    "build:web": "pnpm --filter web build",
+    "build:api": "pnpm --filter api build",
+    "preview": "pnpm --filter web preview",
+    "typecheck": "pnpm -r run typecheck",
+    "fetch-data": "pnpm --filter web fetch-data",
+    "prisma:migrate:dev": "pnpm --filter api prisma:migrate:dev",
+    "prisma:generate": "pnpm --filter api prisma:generate"
   },
   "devDependencies": {
-    "@octokit/rest": "^21.0.2",
-    "@types/node": "^22.10.1",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.3",
-    "autoprefixer": "^10.4.20",
-    "p-limit": "^6.1.0",
-    "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.15",
-    "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.11"
+    "typescript": "^5.6.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "esbuild",
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma"
     ]
   }
 }

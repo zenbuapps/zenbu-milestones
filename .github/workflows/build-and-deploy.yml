@@ -7,6 +7,12 @@ on:
   workflow_dispatch:
   push:
     branches: [master]
+    # Only trigger Pages rebuild when web-facing files change; api/spec/docs changes skip this workflow
+    # (hourly cron still runs regardless of paths)
+    paths:
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - '.github/workflows/build-and-deploy.yml'
 
 # One deployment at a time; skip queued redundant runs but don't cancel an in-flight deploy.
 concurrency:
@@ -47,20 +53,20 @@ jobs:
             echo "::error::ZENBU_ORG_READ_TOKEN secret is not set. Create a Fine-grained PAT with read access to zenbuapps org (contents/issues/metadata) and add it as a repo secret."
             exit 1
           fi
-          pnpm run fetch-data
+          pnpm --filter web fetch-data
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
-      - name: Build
-        run: pnpm run build
+      - name: Build web SPA
+        run: pnpm --filter web build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: apps/web/dist
 
   deploy:
     name: Deploy to GitHub Pages
