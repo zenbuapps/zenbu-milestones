@@ -1,15 +1,22 @@
 ---
 version: 0.1.0
 date: 2026-04-18
-status: draft
+status: partially-superseded
 owner: clarifier agent
 related:
   - specs/data-pipeline.md
   - specs/json-schema.md
-  - specs/deployment.md
   - specs/information-architecture.md
   - specs/clarify/2026-04-18-1036.md
 ---
+
+> **2026-04-21 更新**：本資料夾是此功能初期設計階段（clarify → plan）的完整歷史紀錄，反映當時以「GitHub Pages + Cloudflare Worker」為部署基礎的設計決策。實作後期改採 **NestJS + Prisma + PostgreSQL 後端**（見 `apps/api`），舊 GitHub Pages workflow 已退役。以下檔案中與「Cloudflare Worker」「ZENBU_ORG_READ_TOKEN」「GitHub Pages 部署」「`build-and-deploy.yml`」相關的段落已不反映現況，保留僅供決策歷史參考：
+> - `deployment.md`、`plan.md`、`architecture.md`、`prompt.md`、`user-stories.md`、`requirements.md`、`acceptance-criteria.md`、`data-contract.md`
+>
+> 當前部署狀態與實際 API 契約請見：
+> - `.claude/CLAUDE.md`（專案總綱 + 過渡期狀態）
+> - `specs/api/api.yml`（實際後端 OpenAPI 契約）
+> - `apps/api/src/`（實作）
 
 # Visitor Issue Submission — 功能總覽
 

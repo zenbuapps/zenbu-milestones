@@ -1,16 +1,17 @@
-# Zenbu Milestones Dashboard
+# Zenbu Milestones
 
-靜態儀表板（Vite + React 18 + TypeScript），視覺化呈現 [`zenbuapps`](https://github.com/zenbuapps) GitHub 組織底下所有 repo 的 milestones 與 issues。
+pnpm monorepo：視覺化呈現 [`zenbuapps`](https://github.com/zenbuapps) GitHub 組織底下所有 repo 的 milestones 與 issues，並提供訪客投稿 issue → admin 審核 → 轉發至 GitHub 的工作流程。
 
-線上網址：<https://zenbuapps.github.io/zenbu-milestones/>
+> **狀態**：舊 GitHub Pages 靜態部署已於 2026-04-21 退役，前端部署平台遷移計畫待定。詳見下方「部署」段落。
 
 ## 技術堆疊
 
-- **前端**：Vite 5 + React 18 + TypeScript + Tailwind CSS 3
-- **路由**：`react-router-dom` v6（`HashRouter`，配合 GitHub Pages 靜態部署）
-- **資料源**：GitHub REST API（`@octokit/rest` v21）
-- **資料管線**：build-time fetcher → 靜態 JSON → runtime loader（無 runtime API server）
-- **部署**：GitHub Actions（每小時 cron + push to `master` + 手動 dispatch）
+| 層 | 技術 |
+|---|---|
+| **前端** (`apps/web`) | Vite 5 + React 18 + TypeScript + Tailwind CSS 3 + react-router-dom v6 |
+| **後端** (`apps/api`) | NestJS 11 + Prisma 5 + PostgreSQL + Passport (Google OAuth) + express-session |
+| **共用** (`packages/shared`) | tsup（ESM + CJS + `.d.ts` 三吃）|
+| **資料源** | GitHub REST API（`@octokit/rest` v21）|
 
 ## 快速開始
 
@@ -18,70 +19,81 @@
 
 ```bash
 pnpm install
-pnpm dev          # http://localhost:5173
+cp .env.example .env      # 填入必要值（見下方「環境變數」）
+pnpm dev:all              # 前端 + 後端 + shared watch 一起跑
 ```
 
 ### 指令一覽
 
 | 指令 | 說明 |
 |---|---|
-| `pnpm install` | 安裝相依套件 |
-| `pnpm dev` | Vite 開發伺服器（port 5173）|
-| `pnpm build` | `tsc -b` 型別檢查 + `vite build` → `dist/` |
-| `pnpm preview` | 本地預覽 production build |
-| `pnpm typecheck` | `tsc -b --noEmit`（靜態型別檢查） |
-| `pnpm fetch-data` | 執行 `scripts/fetch-data.ts`（需 `GH_TOKEN` 環境變數）|
+| `pnpm install` | 安裝所有 workspace 相依 |
+| `pnpm dev:web` | 前端 Vite 開發伺服器（port 5173） |
+| `pnpm dev:api` | 後端 NestJS watch 模式（port 3000） |
+| `pnpm dev:shared` | `packages/shared` 的 tsup watch |
+| `pnpm dev:all` | 三個一起跑（`-r --parallel`） |
+| `pnpm build` | 先 `shared`、再平行打 `web` + `api` |
+| `pnpm build:shared` / `build:web` / `build:api` | 個別打包 |
+| `pnpm typecheck` | 所有 workspace 的 `tsc --noEmit` |
+| `pnpm preview` | `apps/web` 的 production preview |
+| `pnpm prisma:generate` | 生成 `@prisma/client` |
+| `pnpm prisma:migrate:dev` | 開發環境 migration |
+| `pnpm fetch-data` | （過渡期）執行舊靜態 fetcher，需 `GH_TOKEN` |
 
-本專案**沒有 lint 設定、沒有測試框架**。`tsc -b` 是唯一的靜態檢查手段。
+本專案**沒有 lint 設定、沒有測試框架**。`tsc --noEmit` 是唯一的靜態檢查手段。
 
 ### 環境變數
 
-複製 `.env.example` 為 `.env` 並填入必要值：
-
-```bash
-cp .env.example .env
-```
-
-主要設定項：
+複製 `.env.example` 為 `.env` 並填入必要值。主要設定項：
 
 | 變數 | 用途 |
 |---|---|
-| `PORT` | 本地後端（NestJS）監聽 port，預設 `3000` |
-| `API_BASE_URL` | 前端呼叫後端的 base URL，預設 `http://localhost:3000` |
-| `GH_TOKEN` | 執行 `pnpm fetch-data` 時需要，fine-grained PAT 對 `zenbuapps` org 有 contents/issues/metadata 唯讀 |
+| `DATABASE_URL` | PostgreSQL 連線字串（Prisma 使用） |
+| `SESSION_SECRET` | express-session 簽章 |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth |
+| `VITE_API_BASE_URL` | 前端呼叫後端的 base URL，預設 `http://localhost:3000` |
+| `PORT` | 後端 NestJS 監聽 port，預設 `3000` |
+| `GH_TOKEN` | 過渡期 `pnpm fetch-data` 需要，fine-grained PAT（`zenbuapps` org / contents + issues + metadata 唯讀）|
 
 ## 架構概覽
 
-### 兩階段資料管線
+### 三個 workspace
 
 ```
-┌────────────────────────────┐        ┌──────────────────────┐
-│ Stage 1: build-time        │        │ Stage 2: runtime     │
-│                            │        │                      │
-│ scripts/fetch-data.ts      │ writes │ src/data/loader.ts   │
-│   ─ @octokit/rest          │───────▶│   ─ fetch() JSON     │
-│   ─ p-limit (rate limit)   │  JSON  │   ─ in-memory cache  │
-│   ─ filter sensitive       │        │                      │
-└────────────────────────────┘        └──────────────────────┘
-        │                                        │
-        ▼                                        ▼
-   public/data/                            SPA 元件消費
-   ├─ summary.json                         （依 types.ts 契約）
-   ├─ repos.json
-   └─ repos/{name}.json
+zenbu-milestones/
+├── apps/
+│   ├── web/       # Vite SPA
+│   └── api/       # NestJS backend
+└── packages/
+    └── shared/    # 共用 DTO / 型別
 ```
 
-- **Stage 1**：跑在 GitHub Actions（或本地以 `GH_TOKEN=xxx pnpm fetch-data` 執行）。抓取、過濾（排除 archived/fork、PR 類型、以及帶有 `SENSITIVE_LABELS` 的 issue），輸出靜態 JSON 至 `public/data/`。
-- **Stage 2**：SPA 啟動後透過 `loadSummary()` / `loadRepoDetail(name)` 讀取上述 JSON，不走任何 runtime API。
+`apps/web` 與 `apps/api` 都 `import from 'shared'`。`shared` 必須先 build，下游才能解析型別（`pnpm build` 已寫死正確順序）。
 
-**契約檔案**：`src/data/types.ts` 是 fetcher 與 SPA 之間的共享介面，改動任一欄位需同步更新兩端。
+### 資料源（過渡期雙軌）
+
+目前兩條資料路徑並存：
+
+1. **舊靜態管線**（逐步退役中）
+   - `apps/web/scripts/fetch-data.ts` 於本機執行，輸出 `apps/web/public/data/*.json`
+   - `apps/web/src/data/loader.ts` 讀上述 JSON
+   - `AppShell` / `RoadmapPage` 仍透過此路徑取 summary / repo detail
+
+2. **新後端 API**
+   - `apps/web/src/data/api.ts` ↔ NestJS（`apps/api`）
+   - 已上線：auth、issue submission、admin review、image upload、repo settings
+   - 待補：`/api/summary`、`/api/repos/:name/detail`（完成後舊管線即可退役）
+
+**契約檔案**：`apps/web/src/data/types.ts` 是 fetcher / loader 與 SPA 之間的共享介面。改動任一欄位需同步更新兩端（詳見 `.claude/rules/data-contract.rule.md`）。
 
 ### 路由
 
-`src/App.tsx` 使用 `HashRouter`（GitHub Pages 只能提供靜態檔案，`BrowserRouter` 在深層連結會 404）：
+`apps/web/src/App.tsx` 使用 `HashRouter`（舊 GitHub Pages 部署遺留）：
 
 - `/` → `OverviewPage`（所有 repo）
 - `#/repo/:name` → `RoadmapPage`（單一 repo 的 milestone / issue）
+
+新部署平台確定後可改回 `BrowserRouter`。
 
 ## 本地後端公開存取（Cloudflare Tunnel）
 
@@ -126,28 +138,35 @@ cloudflared tunnel route dns turbo-local <new-hostname>.powerhouse.tw
 
 ## 部署
 
-部署流程定義於 `.github/workflows/build-and-deploy.yml`：
+### 前端（待定）
 
-- **觸發條件**：每小時整點 cron（`0 * * * *` UTC）、push 到 `master`、手動 `workflow_dispatch`
-- **必要 Secret**：`ZENBU_ORG_READ_TOKEN`（fine-grained PAT，對 `zenbuapps` 組織的 contents / issues / metadata 有唯讀權限）
-- **目標**：GitHub Pages，路徑 `/zenbu-milestones/`
-- **並發控制**：`concurrency: pages` + `cancel-in-progress: false`，排程不互踩
+舊 `.github/workflows/build-and-deploy.yml` 已於 2026-04-21 退役，不再自動部署至 GitHub Pages。新平台遷移計畫待定，候選：
 
-完整部署規範見 [`.claude/rules/pnpm-and-ci.rule.md`](./.claude/rules/pnpm-and-ci.rule.md)。
+- Vercel
+- Cloudflare Pages
+- 其他（自架 Nginx / S3 + CloudFront 等）
+
+遷移時要同步處理：
+- `vite.config.ts::base`（目前已回到預設 `/`，若部署到 sub-path 要重設）
+- `apps/web/src/App.tsx` 的路由器（`HashRouter` → `BrowserRouter`，若新平台支援 SPA fallback）
+- 環境變數注入（`VITE_API_BASE_URL`）
+
+### 後端（待定）
+
+NestJS 尚未部署至雲端，僅本地開發 + Cloudflare Tunnel 對外。候選平台：Railway / Render / Fly.io / 自架 VPS。
 
 ## 專案文件
 
 - [`.claude/CLAUDE.md`](./.claude/CLAUDE.md) — 專案總綱（30 秒上手）
 - [`.claude/rules/data-contract.rule.md`](./.claude/rules/data-contract.rule.md) — `types.ts` / fetcher 契約變更流程
-- [`.claude/rules/vite-base-path.rule.md`](./.claude/rules/vite-base-path.rule.md) — URL / 路由 / 靜態資源路徑規範
 - [`.claude/rules/styling-system.rule.md`](./.claude/rules/styling-system.rule.md) — Tailwind + CSS token 設計系統
-- [`.claude/rules/pnpm-and-ci.rule.md`](./.claude/rules/pnpm-and-ci.rule.md) — pnpm 使用、CI workflow、Secret 管理
-- [`specs/`](./specs) — 資料管線 / JSON schema / 部署 / 資訊架構的穩定契約
+- [`.claude/rules/pnpm-and-ci.rule.md`](./.claude/rules/pnpm-and-ci.rule.md) — pnpm 使用、依賴升級節奏
+- [`specs/`](./specs) — 資料管線 / JSON schema / 資訊架構 / visitor issue submission 的穩定契約
 
 ## 雷區摘要
 
-- 程式碼中**絕對不要** hard-code `/zenbu-milestones/` —— 一律透過 `import.meta.env.BASE_URL`。
-- `vite.config.ts` 的 `base` 必須與 GitHub Pages repo 名稱同步；重新命名 repo 時也要改 `index.html` 的 favicon href。
-- Cloudflare Tunnel hostname 限制：**單層子網域**（見上節）。
+- `packages/shared` 動過任何 export 後，下游（web / api）要重新 build shared 才拿得到新型別（或開 `pnpm dev:shared` watch 模式）。
+- `apps/api/prisma/schema.prisma` 動過 model 或 enum 後，記得先 `pnpm prisma:generate` 再 build，否則 `@prisma/client` 型別不會同步。
 - `Milestone.completion` 對空 milestone 回傳 `0`（不是 `null`），下游元件依賴此保證。
 - `IssueLite.labels[].name` 保證非空（fetcher 已過濾）；`color` 為 6 位 hex（無 `#`）。
+- Cloudflare Tunnel hostname 限制：**單層子網域**（見上節）。

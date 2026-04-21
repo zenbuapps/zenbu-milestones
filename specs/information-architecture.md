@@ -115,14 +115,14 @@ AppShell（唯一的 layout）
 ## 使用者旅程
 
 ### Journey 1：組織管理者的晨間 check-in
-1. 打開 `https://zenbuapps.github.io/zenbu-milestones/`
+1. 打開儀表板首頁（部署 URL 依平台而定）
 2. 看 StatCard：今日有幾個逾期？
 3. 看 StatusDonutChart：整體進度分布
 4. 若有逾期 → 從 Sidebar 或 RepoCard 的警示進去看具體哪些 milestone
 5. 點進 RoadmapPage 看具體 issue
 
 ### Journey 2：PM 追蹤單一專案進度
-1. 直接用書籤開 `https://zenbuapps.github.io/zenbu-milestones/#/repo/foo`
+1. 直接用書籤開 `<DASHBOARD_ROOT>/#/repo/foo`（hash router）
 2. RoadmapPage 直接載入該 repo 的 timeline
 3. 展開 in_progress milestone 看 issue 細節
 4. 點 issue 外連到 GitHub 處理

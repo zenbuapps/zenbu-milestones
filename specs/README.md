@@ -1,15 +1,20 @@
 # specs/ — 規格與契約文件
 
-本專案為 **靜態儀表板**，沒有傳統的「API 規格」或「業務 domain model」。`specs/` 目錄用來記錄 **資料契約、部署契約、視覺資訊架構** 這三類跨時間穩定的規範。
+本專案為 **pnpm monorepo**（前端 React SPA + 後端 NestJS + 共用型別）。`specs/` 目錄用來記錄 **資料契約、API 契約、視覺資訊架構** 這類跨時間穩定的規範，以及歷史功能設計的完整紀錄。
 
 ## 目錄內容
 
-| 檔案 | 範疇 | 讀者 |
+| 檔案 / 目錄 | 範疇 | 讀者 |
 |---|---|---|
-| `data-pipeline.md` | 兩階段資料管線（build-time fetcher + runtime loader）的契約 | 做架構變更的 AI agent / 人類 |
-| `json-schema.md` | `public/data/*.json` 的實際 JSON 形狀（以 `src/data/types.ts` 為單一事實來源的說明）| 消費端開發者、除錯時對照 |
-| `deployment.md` | GitHub Pages 部署契約（workflow 觸發條件、secret、Pages base path）| DevOps / 首次 setup / 遷移 |
+| `data-pipeline.md` | 舊靜態資料管線（build-time fetcher + runtime loader）的契約，過渡期仍在運作 | 做架構變更的 AI agent / 人類 |
+| `json-schema.md` | `public/data/*.json` 的實際 JSON 形狀（以 `apps/web/src/data/types.ts` 為單一事實來源）| 消費端開發者、除錯時對照 |
 | `information-architecture.md` | 頁面資訊架構與使用者旅程（Overview → Repo Roadmap）| 新增頁面 / 重組 navigation 前 |
+| `api/api.yml` | 後端 NestJS REST API 規格（OpenAPI）| 動後端 endpoint / 前端 API client 前 |
+| `activities/` | 業務活動建模 | 設計新流程前 |
+| `visitor-issue-submission/` | 訪客投稿 issue 功能的完整規格（歷史 + 現況並存；部分 deployment / plan 段落已過時）| 維護此功能時 |
+| `clarify/` | 歷史澄清紀錄，反映當時決策，**不是當前狀態** | 回溯決策脈絡 |
+
+> **注意**：舊 `deployment.md` 已於 2026-04-21 隨 GitHub Pages workflow 一併刪除。前端新部署平台遷移計畫待定。
 
 ## 與 `.claude/` 的分工
 
@@ -27,3 +32,4 @@
 2. **列出契約**，不寫 tutorial（那是 rules / skill 的事）
 3. **關鍵邊界條件寫清楚**（空 milestone 的 `completion = 0`、`nextDueMilestone = null`、`SENSITIVE_LABELS` 排除後 issue 數不會變）
 4. **每個檔案 < 300 行**，超過就拆
+5. **過渡期雙軌並存時明確標注**（例如新舊資料源切換期）
