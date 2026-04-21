@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { RepoSettings } from '@prisma/client';
-import type { RepoSettingsRow } from 'shared';
+import type { PublicRepoSettingsRow, RepoSettingsRow } from 'shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from './audit.service';
 import type { UpdateRepoSettingsDto } from './dto/update-repo-settings.dto';
@@ -40,6 +40,24 @@ export class RepoSettingsService {
       },
     });
     return rows.map((row) => this.toRow(row));
+  }
+
+  /**
+   * 公開版列表（匿名訪客可讀），僅回「要不要顯示 / 能否投稿」兩個 boolean。
+   * Sidebar / OverviewPage 等前端入口用這支 API 即時反映 admin toggle 結果。
+   * 不含 updatedBy 等管理員身份資訊，避免隨便洩漏 admin email。
+   */
+  async listPublic(): Promise<PublicRepoSettingsRow[]> {
+    const rows = await this.prisma.repoSettings.findMany({
+      orderBy: [{ repoOwner: 'asc' }, { repoName: 'asc' }],
+      select: {
+        repoOwner: true,
+        repoName: true,
+        canSubmitIssue: true,
+        visibleOnUI: true,
+      },
+    });
+    return rows;
   }
 
   /**

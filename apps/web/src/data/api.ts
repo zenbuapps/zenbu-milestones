@@ -12,6 +12,7 @@ import type {
   AdminUserRow,
   AuditLogRow,
   IssueStatus,
+  PublicRepoSettingsRow,
   RejectIssueInput,
   RepoSettingsRow,
   SubmittedIssueDTO,
@@ -125,6 +126,23 @@ export async function createIssue(input: CreateIssueInput): Promise<SubmittedIss
  */
 export async function fetchMyIssues(): Promise<SubmittedIssueDTO[]> {
   return apiFetch<SubmittedIssueDTO[]>('/api/me/issues');
+}
+
+/**
+ * 公開 repo 設定（anonymous 可讀）。
+ * 前端 AppShell 用此決定 Sidebar / OverviewPage 要不要顯示某 repo。
+ *
+ * 失敗策略：fetch 壞掉（後端未部署 / API_BASE 未設 / 網路錯）一律回 `[]`，
+ * 讓頁面 graceful degrade 為「顯示所有 summary.json 內的 repo」—— 純前端靜態站
+ * 仍可運作，避免後端不可用時整個儀表板跟著掛。
+ */
+export async function fetchPublicRepoSettings(): Promise<PublicRepoSettingsRow[]> {
+  if (!isApiConfigured()) return [];
+  try {
+    return await apiFetch<PublicRepoSettingsRow[]>('/api/repos/settings');
+  } catch {
+    return [];
+  }
 }
 
 // ===========================================================================

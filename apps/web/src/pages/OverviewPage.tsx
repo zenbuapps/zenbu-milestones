@@ -14,12 +14,16 @@ import StatCard from '../components/StatCard';
  * 頂部統計卡 + 兩張圖表 + Repo 卡片 grid
  */
 const OverviewPage = () => {
-  const { summary } = useOutletContext<TAppShellContext>();
+  const { summary, hiddenRepos } = useOutletContext<TAppShellContext>();
 
-  const activeRepos = useMemo(
-    () => (summary ? summary.repos.filter((r) => r.milestoneCount > 0) : []),
-    [summary],
-  );
+  const activeRepos = useMemo(() => {
+    if (!summary) return [];
+    // 先套 admin visibleOnUI 過濾再挑 milestone > 0 的
+    const visible = hiddenRepos.size > 0
+      ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
+      : summary.repos;
+    return visible.filter((r) => r.milestoneCount > 0);
+  }, [summary, hiddenRepos]);
 
   // Donut 用的狀態分布：透過 summary.totals 推導
   const donutData = useMemo(() => {

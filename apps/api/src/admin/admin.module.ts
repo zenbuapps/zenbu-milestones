@@ -48,5 +48,8 @@ import { RepoSettingsService } from './repo-settings.service';
     AdminAuditController,
   ],
   providers: [AuditService, RepoSettingsService],
+  // 匯出 RepoSettingsService 讓 ReposModule（public /api/repos/settings）也能用，
+  // 避免兩份實例；AuditService 不匯出（admin-only 寫入場景）
+  exports: [RepoSettingsService],
 })
 export class AdminModule {}

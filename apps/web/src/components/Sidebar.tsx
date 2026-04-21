@@ -6,6 +6,11 @@ import type { RepoSummary, Summary } from '../data/types';
 type TSidebarProps = {
   /** 載入中時為 null */
   summary: Summary | null;
+  /**
+   * 管理員標記為「不顯示於 UI」的 repo 集合（repoName，目前單一 zenbuapps org）
+   * 傳入空 set 代表全部顯示（fallback；例如後端未部署時）
+   */
+  hiddenRepos?: Set<string>;
   /** 手機版 drawer 是否開啟；桌機版忽略此值（一律顯示） */
   isOpen?: boolean;
   /** 手機版 drawer 關閉回呼（點 NavLink、點 X、點 backdrop 皆觸發） */
@@ -23,17 +28,22 @@ const sortByName = (a: RepoSummary, b: RepoSummary): number =>
  * - 桌機（≥ md）常駐於左側（靜態佈局）
  * - 手機（< md）為 off-canvas drawer，由 TopNav 的漢堡按鈕觸發
  */
-const Sidebar = ({ summary, isOpen = false, onClose }: TSidebarProps) => {
+const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProps) => {
   const [showOthers, setShowOthers] = useState<boolean>(false);
 
   const { withMilestones, withoutMilestones } = useMemo(() => {
     if (!summary) {
       return { withMilestones: [] as RepoSummary[], withoutMilestones: [] as RepoSummary[] };
     }
-    const active = summary.repos.filter((r) => r.milestoneCount > 0).slice().sort(sortByName);
-    const inactive = summary.repos.filter((r) => r.milestoneCount === 0).slice().sort(sortByName);
+    // 先套用 admin 的 visibleOnUI 過濾（hiddenRepos 來自 AppShell 的 /api/repos/settings）
+    // hiddenRepos 未提供時視同空 set（fall back 全部顯示）
+    const visible = hiddenRepos && hiddenRepos.size > 0
+      ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
+      : summary.repos;
+    const active = visible.filter((r) => r.milestoneCount > 0).slice().sort(sortByName);
+    const inactive = visible.filter((r) => r.milestoneCount === 0).slice().sort(sortByName);
     return { withMilestones: active, withoutMilestones: inactive };
-  }, [summary]);
+  }, [summary, hiddenRepos]);
 
   const handleNavClick = () => {
     // 手機版點選後收起；桌機版 onClose 可忽略（state 不受影響）

@@ -94,6 +94,18 @@ export interface UpdateRepoSettingsInput {
   visibleOnUI?: boolean;
 }
 
+/**
+ * Public repo settings（匿名訪客也能讀）
+ * 僅含前端用來決定「要不要顯示這個 repo」以及「能否在此 repo 投稿」所需的最少欄位
+ * 敏感欄位（updatedBy email 等）不外露
+ */
+export interface PublicRepoSettingsRow {
+  repoOwner: string;
+  repoName: string;
+  canSubmitIssue: boolean;
+  visibleOnUI: boolean;
+}
+
 /** 使用者管理列表單列 */
 export interface AdminUserRow {
   id: string;

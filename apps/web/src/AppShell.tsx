@@ -6,6 +6,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import Sidebar from './components/Sidebar';
 import ToastProvider from './components/Toast/ToastProvider';
 import TopNav from './components/TopNav';
+import { fetchPublicRepoSettings } from './data/api';
 import { loadSummary } from './data/loader';
 import type { Summary } from './data/types';
 import { useSession, type UseSessionResult } from './hooks/useSession';
@@ -17,6 +18,16 @@ import { useSession, type UseSessionResult } from './hooks/useSession';
 export type TAppShellContext = {
   summary: Summary | null;
   session: UseSessionResult;
+  /**
+   * 被管理員設為「不顯示於 UI」的 repo 名稱集合（key = repoName，目前僅 zenbuapps 單 org）
+   * 來自 GET /api/repos/settings，後端不可用時為空 set（fall back 顯示全部）
+   */
+  hiddenRepos: Set<string>;
+  /**
+   * 被管理員設為「不接受投稿」的 repo 名稱集合
+   * 未來 RoadmapPage 的「提出 Issue」按鈕可據此顯示 disabled tooltip
+   */
+  nonSubmittableRepos: Set<string>;
 };
 
 /**
@@ -27,18 +38,30 @@ const AppShell = () => {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  const [hiddenRepos, setHiddenRepos] = useState<Set<string>>(() => new Set());
+  const [nonSubmittableRepos, setNonSubmittableRepos] = useState<Set<string>>(() => new Set());
   const location = useLocation();
   const session = useSession();
 
   useEffect(() => {
     let cancelled = false;
-    loadSummary()
-      .then((data) => {
-        if (!cancelled) setSummary(data);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err);
-      });
+    // summary + settings 並行取，兩者各自失敗不互相影響
+    void Promise.all([
+      loadSummary()
+        .then((data) => {
+          if (!cancelled) setSummary(data);
+        })
+        .catch((err: Error) => {
+          if (!cancelled) setError(err);
+        }),
+      fetchPublicRepoSettings().then((rows) => {
+        if (cancelled) return;
+        setHiddenRepos(new Set(rows.filter((r) => !r.visibleOnUI).map((r) => r.repoName)));
+        setNonSubmittableRepos(
+          new Set(rows.filter((r) => !r.canSubmitIssue).map((r) => r.repoName)),
+        );
+      }),
+    ]);
     return () => {
       cancelled = true;
     };
@@ -94,14 +117,14 @@ const AppShell = () => {
     );
   }
 
-  const context: TAppShellContext = { summary, session };
+  const context: TAppShellContext = { summary, session, hiddenRepos, nonSubmittableRepos };
 
   return (
     <ToastProvider>
       <div className="flex h-full flex-col">
         <TopNav summary={summary} onMenuClick={openSidebar} session={session.state} onLogin={session.login} onLogout={session.logout} />
         <div className="relative flex flex-1 overflow-hidden">
-          <Sidebar summary={summary} isOpen={isSidebarOpen} onClose={closeSidebar} />
+          <Sidebar summary={summary} hiddenRepos={hiddenRepos} isOpen={isSidebarOpen} onClose={closeSidebar} />
 
           {/* 手機版 drawer backdrop */}
           {isSidebarOpen && (
