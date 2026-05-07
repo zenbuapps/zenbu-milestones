@@ -18,10 +18,8 @@ api:
   secrets:
     DATABASE_URL: "postgresql://zenburoadmaps:change-me@zenburoadmaps-postgresql:5432/zenburoadmaps"
     SESSION_SECRET: change-me
-    SESSION_COOKIE_DOMAIN: roadmaps.zenbuapps.com
     SESSION_COOKIE_SECURE: "true"
     APP_BASE_URL: "https://roadmaps.zenbuapps.com"
-    API_BASE_URL: "https://roadmaps.zenbuapps.com"
     CORS_ALLOWED_ORIGINS: "https://roadmaps.zenbuapps.com"
     GOOGLE_OAUTH_CLIENT_ID: ""
     GOOGLE_OAUTH_CLIENT_SECRET: ""
