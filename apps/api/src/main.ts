@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import connectPgSimple from 'connect-pg-simple';
+import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import passport from 'passport';
 import { AppModule } from './app.module';
@@ -63,14 +64,13 @@ async function bootstrap(): Promise<void> {
 
   // --------------------------------------------------------------
   // Trust proxy
-  //   - Cloudflare Tunnel / Railway / 其他反向代理前置時需要，
+  //   - K8s Gateway API (Envoy) / Cloudflare Tunnel / Railway 等反向代理前置時需要，
   //     否則 `req.secure`、`X-Forwarded-Proto` 不會被正確解讀，
-  //     導致 express-session 把 secure cookie 視為不安全而拒發。
-  //   - 設 `1` 代表信任最近的一層 proxy；足以覆蓋 Cloudflare 情境。
+  //     導致 express-session 把 secure cookie 視為不安全而 silently drop Set-Cookie。
+  //   - 改為 `true`：信任所有 hop。在 K8s 內網環境是標準做法。
+  //   - 無條件啟用：不依賴 NODE_ENV / cookieSecure 推斷，避免邏輯閘漏氣。
   // --------------------------------------------------------------
-  if (isProduction || needsCrossSite) {
-    app.set('trust proxy', 1);
-  }
+  app.set('trust proxy', true);
 
   // --------------------------------------------------------------
   // Global prefix：所有 route 自動加 /api 前綴
@@ -125,6 +125,23 @@ async function bootstrap(): Promise<void> {
       },
     }),
   );
+
+  // --------------------------------------------------------------
+  // [TEMP-DEBUG] OAuth callback 路徑攔截：印出 trust-proxy 解析結果與原始 XFP header
+  //   排查 prod 登入後 connect.sid cookie 寫不進的問題。
+  //   確認修好之後可以連同此 middleware 整段移除（或改為 isDevelopment 才印）。
+  // --------------------------------------------------------------
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api/auth/google/callback') || req.path === '/api/auth/google') {
+      logger.log(
+        `[OAUTH-DEBUG] path=${req.path} secure=${req.secure} protocol=${req.protocol} ` +
+          `xfp=${req.headers['x-forwarded-proto'] ?? '(none)'} ` +
+          `xff=${req.headers['x-forwarded-for'] ?? '(none)'} ` +
+          `host=${req.headers.host}`,
+      );
+    }
+    next();
+  });
 
   // --------------------------------------------------------------
   // Passport：initialize + session deserialize
