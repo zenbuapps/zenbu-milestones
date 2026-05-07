@@ -41,7 +41,7 @@ export class ApiError extends Error {
 }
 
 const RAW_BASE = import.meta.env.VITE_API_BASE_URL as string | undefined;
-const API_BASE = RAW_BASE ? RAW_BASE.replace(/\/$/, '') : null;
+const API_BASE = RAW_BASE !== undefined ? RAW_BASE.replace(/\/$/, '') : null;
 
 /** 後端 API 是否已設定（dev / prod build 時注入 VITE_API_BASE_URL 才為 true） */
 export const isApiConfigured = (): boolean => API_BASE !== null;
