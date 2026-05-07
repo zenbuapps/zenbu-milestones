@@ -86,11 +86,31 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   if (!res.ok) {
-    const env = body as Envelope<T> | null;
-    if (env && !env.success) {
-      throw new ApiError(env.error.code, env.error.message, res.status);
+    // 後端理想 shape: { success: false, error: { code, message } }
+    // 但 NestJS 預設例外（HttpException、internal 500）會回 { statusCode, message, error? }，
+    // 且 error 可能是字串（'Unauthorized'）或缺。下面對三種 case 都 graceful。
+    if (
+      body &&
+      typeof body === 'object' &&
+      'success' in body &&
+      (body as { success: unknown }).success === false &&
+      'error' in body &&
+      (body as { error: unknown }).error &&
+      typeof (body as { error: unknown }).error === 'object'
+    ) {
+      const err = (body as { error: { code?: unknown; message?: unknown } }).error;
+      const code = typeof err.code === 'string' ? err.code : `HTTP_${res.status}`;
+      const message = typeof err.message === 'string' ? err.message : res.statusText || 'Request failed';
+      throw new ApiError(code, message, res.status);
     }
-    throw new ApiError(`HTTP_${res.status}`, res.statusText || 'Request failed', res.status);
+    const fallbackMessage =
+      body &&
+      typeof body === 'object' &&
+      'message' in body &&
+      typeof (body as { message: unknown }).message === 'string'
+        ? (body as { message: string }).message
+        : res.statusText || 'Request failed';
+    throw new ApiError(`HTTP_${res.status}`, fallbackMessage, res.status);
   }
 
   // 成功但 body 不是 envelope（例如 /api/me 直接回 SessionUserDTO）
