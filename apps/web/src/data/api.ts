@@ -48,8 +48,8 @@ export const isApiConfigured = (): boolean => API_BASE !== null;
 
 /** 登入 / 登出入口（redirect full page，不走 fetch） */
 export const authUrls = {
-  login: () => (API_BASE ? `${API_BASE}/api/auth/google` : null),
-  logout: () => (API_BASE ? `${API_BASE}/api/auth/logout` : null),
+  login: () => (API_BASE !== null ? `${API_BASE}/api/auth/google` : null),
+  logout: () => (API_BASE !== null ? `${API_BASE}/api/auth/logout` : null),
 };
 
 type Envelope<T> = { success: true; data: T } | { success: false; error: { code: string; message: string } };
@@ -61,7 +61,7 @@ type Envelope<T> = { success: true; data: T } | { success: false; error: { code:
  * - 2xx 且 success:true → 回傳 data
  */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  if (!API_BASE) {
+  if (API_BASE === null) {
     throw new ApiError('API_NOT_CONFIGURED', '尚未設定後端 API（VITE_API_BASE_URL）', 0);
   }
 
@@ -170,7 +170,7 @@ export async function uploadImage(
   file: Blob,
   filename = 'pasted-image.png',
 ): Promise<UploadImageResponse> {
-  if (!API_BASE) {
+  if (API_BASE === null) {
     throw new ApiError('API_NOT_CONFIGURED', '尚未設定後端 API（VITE_API_BASE_URL）', 0);
   }
   const fd = new FormData();
@@ -267,7 +267,7 @@ export interface ApproveAdminIssueResult {
  * - non-2xx（401 / 403 / 404 / 500 等）仍 throw ApiError
  */
 export async function approveAdminIssue(id: string): Promise<ApproveAdminIssueResult> {
-  if (!API_BASE) {
+  if (API_BASE === null) {
     throw new ApiError('API_NOT_CONFIGURED', '尚未設定後端 API（VITE_API_BASE_URL）', 0);
   }
 
