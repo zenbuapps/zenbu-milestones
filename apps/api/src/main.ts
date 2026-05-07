@@ -6,6 +6,7 @@ import connectPgSimple from 'connect-pg-simple';
 import session from 'express-session';
 import passport from 'passport';
 import { AppModule } from './app.module';
+import { GithubExceptionFilter } from './common/filters/github-exception.filter';
 
 /**
  * Bootstrap
@@ -143,6 +144,13 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
+
+  // --------------------------------------------------------------
+  // 全域 ExceptionFilter：把 GitHubError 階層轉成前端可解析的 envelope
+  //   { success: false, error: { code, message } }
+  // 不影響其他 exception（HttpException、validation、200+success:false ad-hoc）
+  // --------------------------------------------------------------
+  app.useGlobalFilters(new GithubExceptionFilter());
 
   const port = Number(config.get<string>('PORT') ?? process.env.PORT ?? 3000);
   await app.listen(port);
