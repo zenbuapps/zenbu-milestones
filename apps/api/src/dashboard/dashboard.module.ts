@@ -14,7 +14,7 @@ import { GitHubHealthController } from './github-health.controller';
  *   Controllers
  *     - DashboardController        → GET /api/summary
  *                                     GET /api/repos/:owner/:name/detail
- *                                     GET /api/repos/:owner/:name/milestones/:number/issues
+ *                                     GET /api/repos/:owner/:name/roadmaps/:number/issues
  *                                    （登入保護）
  *     - GitHubHealthController     → GET /api/health/github  （公開，對齊既有 HealthController）
  *     - AdminDashboardController   → POST /api/admin/refresh-data  （AdminGuard）

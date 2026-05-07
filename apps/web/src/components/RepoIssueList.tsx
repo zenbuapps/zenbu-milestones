@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleDot, Inbox, Milestone as MilestoneIcon } from 'lucide-react';
+import { CheckCircle2, CircleDot, Inbox, Milestone as RoadmapIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { IssueLite, RepoDetail } from 'shared';
 import { formatTimeAgo } from '../utils/date';
@@ -19,7 +19,7 @@ const DEFAULT_QUERY: TFilterQuery = {
   state: 'open',
   labels: [],
   assignees: [],
-  milestoneNumber: 'all',
+  roadmapNumber: 'all',
 };
 
 /**
@@ -44,25 +44,25 @@ const escapeRegExp = (raw: string): string =>
 const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
   const [query, setQuery] = useState<TFilterQuery>(DEFAULT_QUERY);
 
-  /** 建立 issue number → milestone number 的 map（issue 自己沒帶 milestone 欄位） */
-  const issueToMilestone = useMemo<Map<number, number>>(() => {
+  /** 建立 issue number → roadmap number 的 map（issue 自己沒帶 roadmap 欄位） */
+  const issueToRoadmap = useMemo<Map<number, number>>(() => {
     const map = new Map<number, number>();
-    for (const m of detail.milestones) {
+    for (const m of detail.roadmaps) {
       for (const i of m.issues) {
         map.set(i.number, m.number);
       }
     }
     return map;
-  }, [detail.milestones]);
+  }, [detail.roadmaps]);
 
-  /** milestone number → title 反查（用於列表顯示 milestone 名稱） */
-  const milestoneTitleByNumber = useMemo<Map<number, string>>(() => {
+  /** roadmap number → title 反查（用於列表顯示 roadmap 名稱） */
+  const roadmapTitleByNumber = useMemo<Map<number, string>>(() => {
     const map = new Map<number, string>();
-    for (const m of detail.milestones) {
+    for (const m of detail.roadmaps) {
       map.set(m.number, m.title);
     }
     return map;
-  }, [detail.milestones]);
+  }, [detail.roadmaps]);
 
   /** 可用的 label 選項（去重；以 name 為 key） */
   const availableLabels = useMemo(() => {
@@ -88,9 +88,9 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
     return [...seen].sort((a, b) => a.localeCompare(b));
   }, [detail.allIssues]);
 
-  const availableMilestones = useMemo(
-    () => detail.milestones.map((m) => ({ number: m.number, title: m.title })),
-    [detail.milestones],
+  const availableRoadmaps = useMemo(
+    () => detail.roadmaps.map((m) => ({ number: m.number, title: m.title })),
+    [detail.roadmaps],
   );
 
   /** 依 query filter allIssues；空 keyword 與空陣列視為「不套用該 filter」 */
@@ -121,19 +121,19 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
         }
       }
 
-      // milestone
-      if (query.milestoneNumber !== 'all') {
-        const linked = issueToMilestone.get(issue.number);
-        if (query.milestoneNumber === 'none') {
+      // roadmap
+      if (query.roadmapNumber !== 'all') {
+        const linked = issueToRoadmap.get(issue.number);
+        if (query.roadmapNumber === 'none') {
           if (linked !== undefined) return false;
-        } else if (linked !== query.milestoneNumber) {
+        } else if (linked !== query.roadmapNumber) {
           return false;
         }
       }
 
       return true;
     });
-  }, [detail.allIssues, query, issueToMilestone]);
+  }, [detail.allIssues, query, issueToRoadmap]);
 
   /** 各狀態計數（忽略 state filter，套用其餘 filter 後分別算） */
   const counts = useMemo(() => {
@@ -151,11 +151,11 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
         const set = new Set(issue.assignees);
         if (!query.assignees.every((n) => set.has(n))) continue;
       }
-      if (query.milestoneNumber !== 'all') {
-        const linked = issueToMilestone.get(issue.number);
-        if (query.milestoneNumber === 'none') {
+      if (query.roadmapNumber !== 'all') {
+        const linked = issueToRoadmap.get(issue.number);
+        if (query.roadmapNumber === 'none') {
           if (linked !== undefined) continue;
-        } else if (linked !== query.milestoneNumber) {
+        } else if (linked !== query.roadmapNumber) {
           continue;
         }
       }
@@ -163,7 +163,7 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
       else closed += 1;
     }
     return { open, closed, all: open + closed };
-  }, [detail.allIssues, query, issueToMilestone]);
+  }, [detail.allIssues, query, issueToRoadmap]);
 
   const clearAll = (): void => setQuery(DEFAULT_QUERY);
 
@@ -181,7 +181,7 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
       <IssueFilterBar
         availableLabels={availableLabels}
         availableAssignees={availableAssignees}
-        availableMilestones={availableMilestones}
+        availableRoadmaps={availableRoadmaps}
         counts={counts}
         query={query}
         onChange={setQuery}
@@ -201,18 +201,18 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
       ) : (
         <ul className="divide-y divide-[--color-border] overflow-hidden rounded-xl border border-[--color-border] bg-white">
           {filtered.map((issue) => {
-            const linkedMilestone = issueToMilestone.get(issue.number);
+            const linkedRoadmap = issueToRoadmap.get(issue.number);
             const linkedTitle =
-              linkedMilestone !== undefined
-                ? milestoneTitleByNumber.get(linkedMilestone) ?? null
+              linkedRoadmap !== undefined
+                ? roadmapTitleByNumber.get(linkedRoadmap) ?? null
                 : null;
             return (
               <IssueRow
                 key={issue.number}
                 issue={issue}
                 keyword={query.keyword}
-                milestoneNumber={linkedMilestone ?? null}
-                milestoneTitle={linkedTitle}
+                roadmapNumber={linkedRoadmap ?? null}
+                roadmapTitle={linkedTitle}
               />
             );
           })}
@@ -225,14 +225,14 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
 type TIssueRowProps = {
   issue: IssueLite;
   keyword: string;
-  milestoneNumber: number | null;
-  milestoneTitle: string | null;
+  roadmapNumber: number | null;
+  roadmapTitle: string | null;
 };
 
 /**
  * 單列 issue：state icon + 標題（外連 GitHub）+ meta 列
  */
-const IssueRow = ({ issue, keyword, milestoneNumber, milestoneTitle }: TIssueRowProps) => (
+const IssueRow = ({ issue, keyword, roadmapNumber, roadmapTitle }: TIssueRowProps) => (
   <li className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[--color-surface-overlay] sm:px-5 sm:py-3.5">
     <span className="mt-0.5 flex-shrink-0">
       {issue.state === 'open' ? (
@@ -263,10 +263,10 @@ const IssueRow = ({ issue, keyword, milestoneNumber, milestoneTitle }: TIssueRow
           {issue.state === 'open' ? '建立於' : '關閉於'}{' '}
           {formatTimeAgo(issue.closedAt ?? issue.createdAt)}
         </span>
-        {milestoneNumber !== null && milestoneTitle !== null && (
+        {roadmapNumber !== null && roadmapTitle !== null && (
           <span className="inline-flex items-center gap-1 text-[--color-text-secondary]">
-            <MilestoneIcon size={12} strokeWidth={2.25} />
-            {milestoneTitle}
+            <RoadmapIcon size={12} strokeWidth={2.25} />
+            {roadmapTitle}
           </span>
         )}
         {issue.assignees.length > 0 && (

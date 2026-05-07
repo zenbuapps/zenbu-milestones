@@ -19,14 +19,14 @@ depends_on:
                                     ┌────────────────────┐
                                     │  GitHub Pages      │
                                     │  zenbuapps.github.io
-                                    │  /zenbu-milestones/│
+                                    │  /zenbu-roadmaps/│
                                     └────────────────────┘
                                               ▲
                                               │ deploy-pages
                                               │
 ┌──────────────────┐   push/cron   ┌────────────────────┐    deploy-worker     ┌──────────────────────┐
 │ GitHub Repo      │ ────────────▶ │  GitHub Actions     │ ──────────────────▶ │  Cloudflare Workers  │
-│ zenbu-milestones │               │  build-and-deploy   │                     │  *.workers.dev       │
+│ zenbu-roadmaps │               │  build-and-deploy   │                     │  *.workers.dev       │
 │                  │               │  .yml               │                     │                      │
 └──────────────────┘               └────────────────────┘                     └──────────────────────┘
                                                                                         │
@@ -70,19 +70,19 @@ worker/
 ### 2.1 `wrangler.toml`
 
 ```toml
-name = "zenbu-milestones-worker"
+name = "zenbu-roadmaps-worker"
 main = "src/index.ts"
 compatibility_date = "2026-04-18"
 workers_dev = true       # 使用 *.workers.dev 免費子域
 
 # Production（staging / review 環境選配，見 OQ-002）
 [env.production]
-name = "zenbu-milestones-worker"
+name = "zenbu-roadmaps-worker"
 
 # vars 區塊放非敏感設定
 [vars]
 GITHUB_ORG = "zenbuapps"
-SUMMARY_JSON_URL = "https://zenbuapps.github.io/zenbu-milestones/data/summary.json"
+SUMMARY_JSON_URL = "https://zenbuapps.github.io/zenbu-roadmaps/data/summary.json"
 ALLOWED_ORIGINS = "https://zenbuapps.github.io,http://localhost:5173,http://localhost:4173"
 
 # secrets 不寫入 toml，使用 `wrangler secret put`：
@@ -307,7 +307,7 @@ V1 採第一種（保守）。
 | `CLOUDFLARE_API_TOKEN` | Cloudflare API token（`Workers Scripts:Edit` + `Account:Read`）| `deploy-worker` job 登入 |
 | `CLOUDFLARE_ACCOUNT_ID` | 32-char hex | `deploy-worker` job 指定 account |
 | `VITE_TURNSTILE_SITE_KEY` | Turnstile Site Key（公開值，但放 secret 方便管理）| 前端 build-time 注入 |
-| `VITE_WORKER_URL` | `https://zenbu-milestones-worker.<cf-account>.workers.dev` | 前端 build-time 注入 |
+| `VITE_WORKER_URL` | `https://zenbu-roadmaps-worker.<cf-account>.workers.dev` | 前端 build-time 注入 |
 
 > `VITE_*` 前綴的變數會被 Vite 注入到前端 bundle，最終公開可見。放在 secret 裡**不是為了保密**，而是為了統一管理、避免 hard-code。
 
@@ -491,28 +491,28 @@ pnpm run dev   # wrangler dev @ http://localhost:8787
 gh run list --workflow=build-and-deploy.yml --limit 1
 
 # 2. 驗證 Worker deployed
-curl -i https://zenbu-milestones-worker.<cf-account>.workers.dev/health
+curl -i https://zenbu-roadmaps-worker.<cf-account>.workers.dev/health
 # 預期：200 OK + { "status": "ok" }（需實作一個 health endpoint）
 
 # 3. 驗證 CORS preflight
-curl -i -X OPTIONS https://zenbu-milestones-worker.<cf-account>.workers.dev/api/v1/repos/test/issues \
+curl -i -X OPTIONS https://zenbu-roadmaps-worker.<cf-account>.workers.dev/api/v1/repos/test/issues \
   -H "Origin: https://zenbuapps.github.io" \
   -H "Access-Control-Request-Method: POST"
 # 預期：204 + Access-Control-Allow-Origin 對應白名單
 
 # 4. 驗證 CORS 拒絕
-curl -i -X OPTIONS https://zenbu-milestones-worker.<cf-account>.workers.dev/api/v1/repos/test/issues \
+curl -i -X OPTIONS https://zenbu-roadmaps-worker.<cf-account>.workers.dev/api/v1/repos/test/issues \
   -H "Origin: https://evil.example.com"
 # 預期：403
 
 # 5. 驗證 Turnstile（需真實 Site Key + 瀏覽器）
-# 手動：打開 https://zenbuapps.github.io/zenbu-milestones/ 測試建立 issue
+# 手動：打開 https://zenbuapps.github.io/zenbu-roadmaps/ 測試建立 issue
 
 # 6. 驗證前端 bundle 無 PAT
-curl -s https://zenbuapps.github.io/zenbu-milestones/assets/*.js | grep -E 'ghp_|github_pat_' || echo "OK: no PAT found"
+curl -s https://zenbuapps.github.io/zenbu-roadmaps/assets/*.js | grep -E 'ghp_|github_pat_' || echo "OK: no PAT found"
 
 # 7. 驗證 issue-types.json
-curl -s https://zenbuapps.github.io/zenbu-milestones/data/issue-types.json | jq
+curl -s https://zenbuapps.github.io/zenbu-roadmaps/data/issue-types.json | jq
 ```
 
 ---
@@ -568,7 +568,7 @@ curl -s https://zenbuapps.github.io/zenbu-milestones/data/issue-types.json | jq
 此更新由 **planner / implementer** 階段執行，並同步：
 
 - `.claude/rules/data-contract.rule.md`（加上新欄位的演化提示）
-- `.claude/skills/zenbu-milestones-dashboard/SKILL.md`（加 Worker 為新路由任務類型）
+- `.claude/skills/zenbu-roadmaps-dashboard/SKILL.md`（加 Worker 為新路由任務類型）
 - `specs/data-pipeline.md`（加入 Worker 作為第三條資料線）
 - `specs/information-architecture.md`（反映 UI 變動）
 

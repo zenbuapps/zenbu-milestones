@@ -16,7 +16,7 @@ status: draft
 
 ## Persona：訪客（Visitor）
 
-匿名瀏覽 Zenbu Milestones Dashboard 的使用者，通常是對 zenbuapps 產品感興趣的外部開發者、潛在客戶，或正在評估是否貢獻開源的人。
+匿名瀏覽 Zenbu Roadmaps Dashboard 的使用者，通常是對 zenbuapps 產品感興趣的外部開發者、潛在客戶，或正在評估是否貢獻開源的人。
 
 ### US-V-001 — 在 RoadmapPage 建立 bug 回報
 
@@ -63,7 +63,7 @@ status: draft
 
 **成功 signal**：
 - Toast 內含 GitHub 新 issue 的 URL（可點擊外連驗證）
-- RoadmapPage 的 milestone 展開清單**立即**出現這個新 issue（樂觀更新）
+- RoadmapPage 的 roadmap 展開清單**立即**出現這個新 issue（樂觀更新）
 - 重新整理頁面後，1 小時內可能再次出現（等 cron 跑過）或消失（樂觀更新 state loss），兩種情況都不應困擾使用者
 
 **關聯**：FR-012、NFR-001
@@ -112,7 +112,7 @@ status: draft
 
 ## Persona：Maintainer（`zenbuapps` org 成員）
 
-負責審閱訪客提交、分流到對應 milestone / team member 的人。通常透過 GitHub 原生 UI 工作，不會進 Zenbu Milestones 管理後台（V1 沒有後台）。
+負責審閱訪客提交、分流到對應 roadmap / team member 的人。通常透過 GitHub 原生 UI 工作，不會進 Zenbu Roadmaps 管理後台（V1 沒有後台）。
 
 ### US-M-001 — 一眼看出哪些 issue 是訪客匿名提交
 
@@ -175,7 +175,7 @@ status: draft
 
 **成功 signal**：
 - 新建 issue 後 1 小時內，`public/data/repos/{name}.json` 含該 issue
-- `public/data/summary.json` 的 totals 與 `nextDueMilestone` 對應更新
+- `public/data/summary.json` 的 totals 與 `nextDueRoadmap` 對應更新
 - 無任何 fetcher 錯誤（因為訪客 issue 走 GitHub 原生管道，與 PR 類型排除、敏感 label 過濾無衝突）
 
 **關聯**：既有 `specs/data-pipeline.md`（不變）
@@ -222,10 +222,10 @@ Zenbuapps 自建的邊緣執行環境，作為唯一寫入通道。
 
 ### US-W-002 — Worker 的 `canSubmitIssue` 檢查來源
 
-> **作為** Worker，**我需要** 一份「可提交 repo 清單」來決定是否允許該 request，**以便** 即使前端被繞過，後端仍能擋住 private repo / 無 milestone repo 的請求。
+> **作為** Worker，**我需要** 一份「可提交 repo 清單」來決定是否允許該 request，**以便** 即使前端被繞過，後端仍能擋住 private repo / 無 roadmap repo 的請求。
 
 **兩種方案**（見 `open-questions.md` 的 OQ-004）：
-- (A) Worker 於 cold start 時 fetch `https://zenbuapps.github.io/zenbu-milestones/data/summary.json` 讀 canSubmitIssue（有 cache staleness 問題）
+- (A) Worker 於 cold start 時 fetch `https://zenbuapps.github.io/zenbu-roadmaps/data/summary.json` 讀 canSubmitIssue（有 cache staleness 問題）
 - (B) Worker 維護一份硬編碼白名單（維運摩擦）
 - (C) Worker 直接呼叫 GitHub API 檢查 repo 屬性（多一次 round-trip）
 

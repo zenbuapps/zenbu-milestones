@@ -14,7 +14,7 @@ import EmptyState from '../components/EmptyState';
 import IssueSubmitDialog from '../components/IssueSubmitDialog';
 import IssueSubmitForm from '../components/IssueSubmitForm';
 import LoadingSpinner from '../components/LoadingSpinner';
-import MilestoneTimeline from '../components/MilestoneTimeline';
+import RoadmapTimeline from '../components/RoadmapTimeline';
 import PageHeader from '../components/PageHeader';
 import RepoIssueList from '../components/RepoIssueList';
 import RequireAuthGate from '../components/RequireAuthGate';
@@ -29,7 +29,7 @@ const DEFAULT_REPO_OWNER = 'zenbuapps';
 
 /**
  * 單一 repo 的 Roadmap 頁
- * 上方資訊列 + Milestone 時間軸 + 登入後可提出 Issue
+ * 上方資訊列 + Roadmap 時間軸 + 登入後可提出 Issue
  *
  * 「提出 Issue」按鈕顯示策略：
  * - authenticated：顯示主要 CTA 按鈕，點擊打開 Dialog
@@ -143,8 +143,8 @@ const RoadmapPage = () => {
     );
   }
 
-  const total = detail.milestones.length;
-  const closed = detail.milestones.filter((m) => m.state === 'closed').length;
+  const total = detail.roadmaps.length;
+  const closed = detail.roadmaps.filter((m) => m.state === 'closed').length;
   const completionPct = total === 0 ? 0 : Math.round((closed / total) * 100);
   const isLoggedIn = session.state.status === 'authenticated';
   const canSubmitIssue = isLoggedIn && !isNonSubmittable;
@@ -220,18 +220,18 @@ const RoadmapPage = () => {
       <div className="card mb-6 grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-5 md:grid-cols-4">
         <InfoCell label="語言" value={detail.language ?? '—'} />
         <InfoCell label="最後更新" value={formatDate(detail.updatedAt)} />
-        <InfoCell label="總 Milestones" value={String(total)} />
+        <InfoCell label="總 Roadmaps" value={String(total)} />
         <InfoCell label="完成率" value={`${completionPct}%`} />
       </div>
 
       {total === 0 ? (
         <EmptyState
           icon={Inbox}
-          title="此 repo 尚未建立任何 milestone"
-          description="在 GitHub 上為 repo 建立 milestone 後，會自動出現在這裡。"
+          title="此 repo 尚未建立任何 roadmap"
+          description="在 GitHub 上為 repo 建立 roadmap 後，會自動出現在這裡。"
         />
       ) : (
-        <MilestoneTimeline milestones={detail.milestones} />
+        <RoadmapTimeline roadmaps={detail.roadmaps} />
       )}
 
       {detail.allIssues.length > 0 && <RepoIssueList detail={detail} />}

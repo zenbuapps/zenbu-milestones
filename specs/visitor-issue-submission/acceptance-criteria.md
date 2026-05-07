@@ -98,7 +98,7 @@ Feature: 訪客建立 issue（V1）
       And Worker 已在 labels 中強制附加 "待審核"
       And Modal 在 500ms 內關閉
       And 頁面右下角顯示 Toast「issue #<number> 已建立」含連結到 htmlUrl
-      And RoadmapPage 對應 milestone 的 issues 陣列立即 append 這個新 issue（樂觀更新）
+      And RoadmapPage 對應 roadmap 的 issues 陣列立即 append 這個新 issue（樂觀更新）
 
   Rule: Worker 端必須強制附加「待審核」label
 
@@ -122,12 +122,12 @@ Feature: 訪客對現有 issue 留言（V1）
 
   Background:
     Given 我在 "#/repo/example-repo"
-    And example-repo 有 milestone "v1.0"，其下 issue #42 標題為 "登入按鈕不動"
+    And example-repo 有 roadmap "v1.0"，其下 issue #42 標題為 "登入按鈕不動"
 
   Rule: 展開 issue 後顯示「留言」按鈕
 
-    Example: 從 MilestoneNode 展開 issue list
-      Given v1.0 milestone 預設展開
+    Example: 從 RoadmapNode 展開 issue list
+      Given v1.0 roadmap 預設展開
       When 我點擊 issue #42 的「留言」按鈕
       Then 留言 Modal 開啟
       And Modal 標題為 "對 #42 留言"
@@ -237,7 +237,7 @@ Feature: OverviewPage 依 canSubmitIssue 分區
 
   Background:
     Given summary.json 包含：
-      | name              | isPrivate | milestoneCount | canSubmitIssue |
+      | name              | isPrivate | roadmapCount | canSubmitIssue |
       | public-with-ms    | false     | 3              | true           |
       | public-no-ms      | false     | 0              | false          |
       | private-with-ms   | true      | 2              | false          |
@@ -291,18 +291,18 @@ Feature: types.ts 與 JSON 契約變更
 
   Rule: RepoSummary 新增 canSubmitIssue 欄位（boolean）
 
-    Example: 公開且有 milestone
-      Given repo: { isPrivate: false, milestones: [ms1, ms2] }
+    Example: 公開且有 roadmap
+      Given repo: { isPrivate: false, roadmaps: [ms1, ms2] }
       When Fetcher 計算 RepoSummary
       Then RepoSummary.canSubmitIssue === true
 
-    Example: 公開但無 milestone
-      Given repo: { isPrivate: false, milestones: [] }
+    Example: 公開但無 roadmap
+      Given repo: { isPrivate: false, roadmaps: [] }
       When Fetcher 計算 RepoSummary
       Then RepoSummary.canSubmitIssue === false
 
-    Example: 私有即便有 milestone
-      Given repo: { isPrivate: true, milestones: [ms1] }
+    Example: 私有即便有 roadmap
+      Given repo: { isPrivate: true, roadmaps: [ms1] }
       When Fetcher 計算 RepoSummary
       Then RepoSummary.canSubmitIssue === false
 

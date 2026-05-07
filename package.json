@@ -1,5 +1,5 @@
 {
-  "name": "zenbu-milestones-monorepo",
+  "name": "zenbu-roadmaps-monorepo",
   "private": true,
   "version": "0.2.0",
   "packageManager": "pnpm@10.32.1",

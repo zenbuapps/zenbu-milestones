@@ -14,7 +14,7 @@ import {
   type AuditLogRow,
   type GithubHealthStatus,
   type IssueStatus,
-  type MilestoneIssuesPage,
+  type RoadmapIssuesPage,
   type PublicRepoSettingsRow,
   type RefreshDataResult,
   type RejectIssueInput,
@@ -358,14 +358,14 @@ export async function fetchAuditLogs(limit: number = 50): Promise<AuditLogRow[]>
 // ===========================================================================
 // 這組 endpoint 取代 build-time 產出的 public/data/*.json，全部走 runtime API。
 // 認證行為：
-//   - summary / repoDetail / milestoneIssues → 登入必要（未登入回 401）
+//   - summary / repoDetail / roadmapIssues → 登入必要（未登入回 401）
 //   - adminRefresh → admin only（未登入 401 / 非 admin 403 / 太頻繁 429）
 //   - githubHealth → 公開（無需登入）
 // 所有 endpoint 都沿用 apiFetch 的 envelope 處理（`{ success, data }` → 直接 unwrap
 // 回 data；health 無 envelope 時走末尾 fallback 直接回 body）。
 
 /**
- * 取得所有 repo 的 milestone / issue 總覽（Phase 2 取代 summary.json）。
+ * 取得所有 repo 的 roadmap / issue 總覽（Phase 2 取代 summary.json）。
  * 未登入 → throw ApiError{httpStatus:401}；呼叫端可據此呈現 RequireAuthGate。
  */
 export async function fetchSummary(): Promise<Summary> {
@@ -373,7 +373,7 @@ export async function fetchSummary(): Promise<Summary> {
 }
 
 /**
- * 取得單一 repo 的完整 milestone / issue detail（Phase 2 取代 repos/{name}.json）。
+ * 取得單一 repo 的完整 roadmap / issue detail（Phase 2 取代 repos/{name}.json）。
  * 未登入 → throw ApiError{httpStatus:401}。
  */
 export async function fetchRepoDetail(
@@ -383,8 +383,8 @@ export async function fetchRepoDetail(
   return apiFetch<RepoDetail>(API_PATHS.repoDetail(owner, name));
 }
 
-/** fetchMilestoneIssues 的可選參數 */
-export interface FetchMilestoneIssuesOptions {
+/** fetchRoadmapIssues 的可選參數 */
+export interface FetchRoadmapIssuesOptions {
   /** 1-indexed 頁碼，預設由後端決定（目前為 1） */
   page?: number;
   /** 每頁筆數，預設由後端決定（目前為 50） */
@@ -392,22 +392,22 @@ export interface FetchMilestoneIssuesOptions {
 }
 
 /**
- * 取得某個 milestone 的 issue 分頁（大型 milestone 的 fallback）。
- * 小型 milestone 可直接讀 RepoDetail.milestones[].issues，不必呼叫此 endpoint。
+ * 取得某個 roadmap 的 issue 分頁（大型 roadmap 的 fallback）。
+ * 小型 roadmap 可直接讀 RepoDetail.roadmaps[].issues，不必呼叫此 endpoint。
  */
-export async function fetchMilestoneIssues(
+export async function fetchRoadmapIssues(
   owner: string,
   name: string,
-  milestoneNumber: number,
-  opts?: FetchMilestoneIssuesOptions,
-): Promise<MilestoneIssuesPage> {
+  roadmapNumber: number,
+  opts?: FetchRoadmapIssuesOptions,
+): Promise<RoadmapIssuesPage> {
   const params = new URLSearchParams();
   if (opts?.page !== undefined) params.set('page', String(opts.page));
   if (opts?.perPage !== undefined) params.set('perPage', String(opts.perPage));
   const query = params.toString();
-  const base = API_PATHS.milestoneIssues(owner, name, milestoneNumber);
+  const base = API_PATHS.roadmapIssues(owner, name, roadmapNumber);
   const path = query ? `${base}?${query}` : base;
-  return apiFetch<MilestoneIssuesPage>(path);
+  return apiFetch<RoadmapIssuesPage>(path);
 }
 
 /**

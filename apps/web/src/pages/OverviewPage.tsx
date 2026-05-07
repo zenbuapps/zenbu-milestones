@@ -18,23 +18,23 @@ const OverviewPage = () => {
 
   const activeRepos = useMemo(() => {
     if (!summary) return [];
-    // 先套 admin visibleOnUI 過濾再挑 milestone > 0 的
+    // 先套 admin visibleOnUI 過濾再挑 roadmap > 0 的
     const visible = hiddenRepos.size > 0
       ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
       : summary.repos;
-    return visible.filter((r) => r.milestoneCount > 0);
+    return visible.filter((r) => r.roadmapCount > 0);
   }, [summary, hiddenRepos]);
 
   // Donut 用的狀態分布：透過 summary.totals 推導
   const donutData = useMemo(() => {
     if (!summary) return { done: 0, inProgress: 0, overdue: 0, noDue: 0 };
-    const done = summary.totals.closedMilestones;
-    const overdue = summary.totals.overdueMilestones;
-    // openMilestones 包含 overdue 與 in_progress 與 no_due；
+    const done = summary.totals.closedRoadmaps;
+    const overdue = summary.totals.overdueRoadmaps;
+    // openRoadmaps 包含 overdue 與 in_progress 與 no_due；
     // 在 summary 層級我們無法精確區分 in_progress vs no_due，
     // 所以將非 overdue 的 open 視為 in_progress（no_due 顯示為 0）。
     // 這是 summary 的精度限制，RoadmapPage 會用 detail 精確分類。
-    const inProgress = Math.max(0, summary.totals.openMilestones - overdue);
+    const inProgress = Math.max(0, summary.totals.openRoadmaps - overdue);
     return { done, inProgress, overdue, noDue: 0 };
   }, [summary]);
 
@@ -46,7 +46,7 @@ const OverviewPage = () => {
     <>
       <PageHeader
         title="總覽"
-        description="所有專案的 milestone 進度與 roadmap"
+        description="所有專案的 roadmap 進度與 roadmap"
       />
 
       {/* 4 張 StatCard */}
@@ -59,17 +59,17 @@ const OverviewPage = () => {
           color="bg-[--color-primary-50] text-[--color-brand]"
         />
         <StatCard
-          label="進行中 Milestones"
-          value={totals.openMilestones}
-          sub={`已完成 ${totals.closedMilestones}`}
+          label="進行中 Roadmaps"
+          value={totals.openRoadmaps}
+          sub={`已完成 ${totals.closedRoadmaps}`}
           icon={Clock}
           color="bg-blue-50 text-blue-600"
         />
         <StatCard
-          label="逾期 Milestones"
+          label="逾期 Roadmaps"
           value={
-            <span className={totals.overdueMilestones > 0 ? 'text-[--color-error]' : undefined}>
-              {totals.overdueMilestones}
+            <span className={totals.overdueRoadmaps > 0 ? 'text-[--color-error]' : undefined}>
+              {totals.overdueRoadmaps}
             </span>
           }
           icon={AlertTriangle}
@@ -107,10 +107,10 @@ const OverviewPage = () => {
         <div className="card p-5">
           <div className="mb-3">
             <h2 className="text-base font-semibold text-[--color-text-primary]">
-              Milestone 狀態分布
+              Roadmap 狀態分布
             </h2>
             <p className="text-xs text-[--color-text-muted]">
-              所有 repo 中的 milestone 完成/進行/逾期比例
+              所有 repo 中的 roadmap 完成/進行/逾期比例
             </p>
           </div>
           <StatusDonutChart {...donutData} />
@@ -121,8 +121,8 @@ const OverviewPage = () => {
       {activeRepos.length === 0 ? (
         <EmptyState
           icon={Inbox}
-          title="目前沒有任何有 milestone 的 repo"
-          description="當 org 底下的 repo 建立了 milestone 後，會自動出現在這裡。"
+          title="目前沒有任何有 roadmap 的 repo"
+          description="當 org 底下的 repo 建立了 roadmap 後，會自動出現在這裡。"
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">

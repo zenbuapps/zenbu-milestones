@@ -53,7 +53,7 @@
 
 #### 允許的 Tailwind 預設色（已在現有元件觀察到）
 
-- `bg-blue-50` / `text-blue-600`：「進行中 milestone」圖示方塊
+- `bg-blue-50` / `text-blue-600`：「進行中 roadmap」圖示方塊
 - `bg-orange-50` / `text-orange-500` / `text-orange-600`：「逾期」警示
 - `bg-green-50` / `text-green-600` / `bg-green-500`：「已完成」狀態
 - `bg-gray-100` / `text-gray-500` / `bg-gray-300`：「未排程」中性狀態

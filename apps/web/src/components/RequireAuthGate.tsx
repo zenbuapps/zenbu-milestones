@@ -42,7 +42,7 @@ const RequireAuthGate = ({ onLogin }: TRequireAuthGateProps) => {
           請先登入以查看儀表板
         </h2>
         <p className="max-w-sm text-sm text-[--color-text-muted]">
-          Zenbu Milestones 現在需要登入才能檢視各 repo 的進度。請使用 Google 帳號登入。
+          Zenbu Roadmaps 現在需要登入才能檢視各 repo 的進度。請使用 Google 帳號登入。
         </p>
         <button
           type="button"

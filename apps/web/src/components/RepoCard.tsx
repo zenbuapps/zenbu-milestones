@@ -10,7 +10,7 @@ type TRepoCardProps = {
 
 /**
  * Repository 卡片
- * 顯示語言、隱私、描述、milestone 完成率、下一個 milestone 與逾期警告
+ * 顯示語言、隱私、描述、roadmap 完成率、下一個 roadmap 與逾期警告
  */
 const RepoCard = ({ repo }: TRepoCardProps) => {
   const completionPct = Math.round(repo.completionRate * 100);
@@ -48,15 +48,15 @@ const RepoCard = ({ repo }: TRepoCardProps) => {
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between text-xs text-[--color-text-secondary]">
           <span>
-            {repo.closedMilestoneCount} / {repo.milestoneCount} milestones 完成
+            {repo.closedRoadmapCount} / {repo.roadmapCount} roadmaps 完成
           </span>
           <span className="font-semibold text-[--color-text-primary]">{completionPct}%</span>
         </div>
         <ProgressBar value={repo.completionRate} />
       </div>
 
-      {/* 下一個 milestone */}
-      {repo.nextDueMilestone && (
+      {/* 下一個 roadmap */}
+      {repo.nextDueRoadmap && (
         <div className="flex items-start gap-2 rounded-lg bg-[--color-surface-overlay] px-3 py-2">
           <Clock
             size={14}
@@ -65,10 +65,10 @@ const RepoCard = ({ repo }: TRepoCardProps) => {
           />
           <div className="min-w-0 flex-1 text-xs">
             <div className="truncate font-medium text-[--color-text-primary]">
-              {repo.nextDueMilestone.title}
+              {repo.nextDueRoadmap.title}
             </div>
             <div className="text-[--color-text-muted]">
-              {formatRelative(repo.nextDueMilestone.dueOn)}
+              {formatRelative(repo.nextDueRoadmap.dueOn)}
             </div>
           </div>
         </div>
@@ -78,7 +78,7 @@ const RepoCard = ({ repo }: TRepoCardProps) => {
       {repo.overdueCount > 0 && (
         <div className="flex items-center gap-2 rounded-lg bg-orange-50 px-3 py-2 text-xs font-medium text-orange-600">
           <AlertTriangle size={14} strokeWidth={2} />
-          <span>{repo.overdueCount} 個 milestone 逾期</span>
+          <span>{repo.overdueCount} 個 roadmap 逾期</span>
         </div>
       )}
 

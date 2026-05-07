@@ -10,7 +10,7 @@ flowchart TD
     Siteverify[(Cloudflare siteverify)]
     GitHub[(GitHub REST API)]
 
-    Visitor -->|1. 進入 RoadmapPage 展開 milestone| SPA
+    Visitor -->|1. 進入 RoadmapPage 展開 roadmap| SPA
     SPA --> CheckCanComment{repo canSubmitIssue === true?}
     CheckCanComment -- 否 --> HideBtn[IssueList 不顯示留言按鈕]
     CheckCanComment -- 是 --> ShowBtn[每個 issue 顯示留言按鈕 btn-ghost]

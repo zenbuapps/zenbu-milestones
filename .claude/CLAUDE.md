@@ -2,7 +2,7 @@
 
 本檔案為 Claude Code（claude.ai/code）在本 repo 中工作時的指引。作為專案總綱（30 秒上手），細節規範依任務類型讀下列檔案：
 
-- `.claude/skills/zenbu-milestones-dashboard/SKILL.md` — 專案架構索引（依任務類型路由到對應 rule）
+- `.claude/skills/zenbu-roadmaps-dashboard/SKILL.md` — 專案架構索引（依任務類型路由到對應 rule）
 - `.claude/rules/data-contract.rule.md` — 改 shared DTO / dashboard service 產出形狀時
 - `.claude/rules/styling-system.rule.md` — 新增 UI、配色、圖示時
 - `.claude/rules/pnpm-and-ci.rule.md` — 動依賴、workspace 建置順序時
@@ -11,7 +11,7 @@
 
 ## 專案是什麼
 
-**pnpm monorepo**，視覺化呈現 `zenbuapps` GitHub 組織下所有 repo 的 milestones 與 issues，並接受訪客投稿 issue 的工作流程：
+**pnpm monorepo**，視覺化呈現 `zenbuapps` GitHub 組織下所有 repo 的 roadmaps 與 issues，並接受訪客投稿 issue 的工作流程：
 
 ```
 apps/
@@ -57,11 +57,11 @@ pnpm prisma:migrate:dev    # 開發環境 migration
 
 ## 本地公開存取（Cloudflare Tunnel）
 
-本機後端（NestJS 監聽 port 3000，對應 `.env` 中的 `API_BASE_URL=http://localhost:3000`）透過 Cloudflare Tunnel 對外公開為 `https://local-milestones.powerhouse.tw`，用於需要 HTTPS 的整合情境（OAuth callback、webhook 測試等）。
+本機後端（NestJS 監聽 port 3000，對應 `.env` 中的 `API_BASE_URL=http://localhost:3000`）透過 Cloudflare Tunnel 對外公開為 `https://local-roadmaps.powerhouse.tw`，用於需要 HTTPS 的整合情境（OAuth callback、webhook 測試等）。
 
 | 項目 | 值 |
 |---|---|
-| 公開 URL | `https://local-milestones.powerhouse.tw` |
+| 公開 URL | `https://local-roadmaps.powerhouse.tw` |
 | 指向本地 | `http://localhost:3000` |
 | Tunnel 名稱 | `turbo-local` |
 | Tunnel UUID | `fdf28065-c202-42d4-89dd-0440dd18cefd` |
@@ -85,12 +85,12 @@ cloudflared tunnel route dns turbo-local <hostname>.powerhouse.tw
 
 ### 命名限制（雷區）
 
-**Hostname 必須為單層子網域**（如 `local-milestones.powerhouse.tw`），**不可使用多層**（如 `local.milestones.powerhouse.tw`）。原因：Cloudflare Universal SSL 僅涵蓋 `*.powerhouse.tw` 單層通配，雙層子網域會在 TLS handshake 階段失敗。沿用現有 dash 連接慣例以確保 SSL 涵蓋。
+**Hostname 必須為單層子網域**（如 `local-roadmaps.powerhouse.tw`），**不可使用多層**（如 `local.roadmaps.powerhouse.tw`）。原因：Cloudflare Universal SSL 僅涵蓋 `*.powerhouse.tw` 單層通配，雙層子網域會在 TLS handshake 階段失敗。沿用現有 dash 連接慣例以確保 SSL 涵蓋。
 
 ## 架構：後端 Dashboard Module
 
 **實作**：`apps/api/src/dashboard/`
-- `dashboard.service.ts` —— 用 `GithubService` 抓 org / repos / milestones / issues；`createLimiter` 做 concurrency 控制；SENSITIVE_LABELS 過濾；sort & shape 對齊 shared DTO
+- `dashboard.service.ts` —— 用 `GithubService` 抓 org / repos / roadmaps / issues；`createLimiter` 做 concurrency 控制；SENSITIVE_LABELS 過濾；sort & shape 對齊 shared DTO
 - `dashboard-cache.service.ts` —— in-memory TTL map（5 分鐘），支援 prefix delete
 - `dashboard.controller.ts` / `admin-dashboard.controller.ts` / `github-health.controller.ts` —— HTTP layer
 - 全部套 `AuthenticatedGuard`（admin endpoints 再加 `AdminGuard`）
@@ -98,21 +98,21 @@ cloudflared tunnel route dns turbo-local <hostname>.powerhouse.tw
 **Cache keys**：
 - `dashboard:summary`
 - `dashboard:repo:{owner}/{name}`
-- `dashboard:milestone-issues:{owner}/{name}/{number}:p{page}:s{perPage}`
+- `dashboard:roadmap-issues:{owner}/{name}/{number}:p{page}:s{perPage}`
 
 `POST /api/admin/refresh-data` 清所有 `dashboard:` prefix，10 秒 debounce 防呆。
 
-**前端 client**：`apps/web/src/data/api.ts` 的 `fetchSummary` / `fetchRepoDetail` / `fetchMilestoneIssues` / `refreshAdminData` / `fetchGithubHealth`，全走 `shared` 的 `API_PATHS` 常數（無 hardcode URL）。
+**前端 client**：`apps/web/src/data/api.ts` 的 `fetchSummary` / `fetchRepoDetail` / `fetchRoadmapIssues` / `refreshAdminData` / `fetchGithubHealth`，全走 `shared` 的 `API_PATHS` 常數（無 hardcode URL）。
 
 ### 共用契約
 
-`packages/shared/src/index.ts` 最底下兩個 section（Dashboard data + Phase 2）定義 `Summary` / `RepoDetail` / `Milestone` / `IssueLite` 等型別，是後端產出與前端消費的唯一事實來源。改動任一欄位需同步三端（shared / api / web），詳見 `.claude/rules/data-contract.rule.md`。
+`packages/shared/src/index.ts` 最底下兩個 section（Dashboard data + Phase 2）定義 `Summary` / `RepoDetail` / `Roadmap` / `IssueLite` 等型別，是後端產出與前端消費的唯一事實來源。改動任一欄位需同步三端（shared / api / web），詳見 `.claude/rules/data-contract.rule.md`。
 
 ### 路由與登入
 
 `apps/web/src/App.tsx` 目前使用 `HashRouter`（舊 GitHub Pages 部署遺留）。兩條路由：
 - `/` → `OverviewPage`（所有 repo）
-- `#/repo/:name` → `RoadmapPage`（單一 repo 的 milestone / issue）
+- `#/repo/:name` → `RoadmapPage`（單一 repo 的 roadmap / issue）
 
 **兩頁都要登入才能看**。未登入時 `AppShell` / `RoadmapPage` 會掛 `<RequireAuthGate />`（全螢幕登入提示 + Google 登入按鈕）。投稿 / admin 流程沿用原本的 auth 邏輯。
 
@@ -140,5 +140,5 @@ Tailwind 3 + 一套小型的 CSS custom-property 設計系統（在 `apps/web/sr
 - `packages/shared` 動過任何 export 後，下游（web / api）要重新 build `shared` 才拿得到新型別（或開 `pnpm dev:shared` watch 模式）。
 - 改 `DashboardService` 邏輯時，cache 可能讓你測到舊資料：重啟 api server，或打 `POST /api/admin/refresh-data` 清。
 - `IssueLite.labels[].name` 保證非空；當 GitHub 回傳字串型 label 時，`color` 預設為 `'888888'`（6-hex 無 `#`）。
-- `Milestone.completion` 對空 milestone 回傳 `0`（不是 `null`），下游元件依賴此保證。
+- `Roadmap.completion` 對空 roadmap 回傳 `0`（不是 `null`），下游元件依賴此保證。
 - `computeCompletion` 邏輯在後端 `DashboardService` 與前端 `apps/web/src/utils/progress.ts` 各有一份實作，邊界行為必須一致。

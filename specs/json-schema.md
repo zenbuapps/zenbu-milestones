@@ -12,18 +12,18 @@ Dashboard endpoints 回傳 JSON 的形狀由 `packages/shared/src/index.ts` 的 
 |---|---|---|
 | `GET /api/summary` | `Summary` | 永遠 200（不會空） |
 | `GET /api/repos/:owner/:name/detail` | `RepoDetail` | repo 不存在時 404 |
-| `GET /api/repos/:owner/:name/milestones/:number/issues` | `MilestoneIssuesPage` | milestone 不存在時 404 |
+| `GET /api/repos/:owner/:name/roadmaps/:number/issues` | `RoadmapIssuesPage` | roadmap 不存在時 404 |
 | `GET /api/health/github` | `GithubHealthStatus` | 永遠 200（ok=false 也回 200） |
 | `POST /api/admin/refresh-data` | `RefreshDataResult` | 429（10s debounce 內重複打） |
 
 消費端判斷「某 repo 有 detail 可以載」的正確方法：
 ```ts
-if (repoSummary.milestoneCount > 0) {
+if (repoSummary.roadmapCount > 0) {
   const detail = await fetchRepoDetail(owner, repoSummary.name);
 }
 ```
 
-`milestoneCount === 0` 時後端可能回空 `RepoDetail`（`milestones: []`）；前端可早退避免多餘請求。
+`roadmapCount === 0` 時後端可能回空 `RepoDetail`（`roadmaps: []`）；前端可早退避免多餘請求。
 
 ---
 
@@ -35,23 +35,23 @@ if (repoSummary.milestoneCount > 0) {
 
 | 欄位 | 語意 | 邊界 |
 |---|---|---|
-| `repos` | **有** milestone 的 repo 數 | `repos ≤ allRepos` |
-| `allRepos` | 所有 repo 數（含無 milestone 的）| 剔除 archived / fork 後的數字 |
-| `milestones` | 全 org 總 milestone 數（含 closed）| — |
-| `openMilestones` | 全 org open milestone 總數 | — |
-| `closedMilestones` | 全 org closed milestone 總數 | `open + closed = milestones` |
-| `overdueMilestones` | 全 org 逾期 milestone 數（open + `dueOn < now`）| `overdue ≤ openMilestones` |
-| `openIssues` / `closedIssues` | 全 org issues 計數（來自 milestone 的加總；**未包含不在任何 milestone 內的 issue**）| — |
+| `repos` | **有** roadmap 的 repo 數 | `repos ≤ allRepos` |
+| `allRepos` | 所有 repo 數（含無 roadmap 的）| 剔除 archived / fork 後的數字 |
+| `roadmaps` | 全 org 總 roadmap 數（含 closed）| — |
+| `openRoadmaps` | 全 org open roadmap 總數 | — |
+| `closedRoadmaps` | 全 org closed roadmap 總數 | `open + closed = roadmaps` |
+| `overdueRoadmaps` | 全 org 逾期 roadmap 數（open + `dueOn < now`）| `overdue ≤ openRoadmaps` |
+| `openIssues` / `closedIssues` | 全 org issues 計數（來自 roadmap 的加總；**未包含不在任何 roadmap 內的 issue**）| — |
 
-**已知精度限制**：`Totals.openMilestones` 包含 `overdue` + `in_progress` + `no_due`（無 `dueOn` 的 open milestone）。Summary 層無法精確分辨後兩者 —— 見 `apps/web/src/pages/OverviewPage.tsx::donutData` 的備註。RoadmapPage 使用 detail 可精確分類。
+**已知精度限制**：`Totals.openRoadmaps` 包含 `overdue` + `in_progress` + `no_due`（無 `dueOn` 的 open roadmap）。Summary 層無法精確分辨後兩者 —— 見 `apps/web/src/pages/OverviewPage.tsx::donutData` 的備註。RoadmapPage 使用 detail 可精確分類。
 
 ### `Summary.repos` 的排序（契約）
 
 ```
-hasMilestones desc, name asc
+hasRoadmaps desc, name asc
 ```
 
-亦即：有 milestone 的 repo 在前（字母序），無 milestone 的 repo 在後（字母序）。`Sidebar` 與 `OverviewPage` 的 `activeRepos` filter 依賴此排序（雖然 `Sidebar` 有再排一次作為保險）。
+亦即：有 roadmap 的 repo 在前（字母序），無 roadmap 的 repo 在後（字母序）。`Sidebar` 與 `OverviewPage` 的 `activeRepos` filter 依賴此排序（雖然 `Sidebar` 有再排一次作為保險）。
 
 ---
 
@@ -66,7 +66,7 @@ hasMilestones desc, name asc
 | `name` | string | repo short name（不含 org prefix）|
 | `htmlUrl` | string | GitHub UI URL |
 | `isPrivate` | boolean | 是否為 private repo（UI 顯示鎖頭圖示）|
-| `milestoneCount` | number | 總 milestone 數（含 closed）|
+| `roadmapCount` | number | 總 roadmap 數（含 closed）|
 | `completionRate` | number | **[0, 1]**，`closedIssues / (openIssues + closedIssues)`；全空時為 `0` |
 
 ### 可空欄位
@@ -75,22 +75,22 @@ hasMilestones desc, name asc
 |---|---|
 | `description` | repo 沒填描述 |
 | `language` | repo 沒有主要語言（常見於純 markdown repo）|
-| `nextDueMilestone` | **沒有**未來 / 已到期的 open milestone 帶 `dueOn`（**注意**：有 open milestone 但都沒 `dueOn` 時也會是 null）|
+| `nextDueRoadmap` | **沒有**未來 / 已到期的 open roadmap 帶 `dueOn`（**注意**：有 open roadmap 但都沒 `dueOn` 時也會是 null）|
 
 ---
 
 ## RepoDetail
 
-單一 repo 的完整 milestone + issue 列表（詳情頁用）。
+單一 repo 的完整 roadmap + issue 列表（詳情頁用）。
 
 與 `RepoSummary` 的差異：
-- 不帶聚合指標（`completionRate` / `overdueCount` / `nextDueMilestone` 等）
-- 多了 `milestones: Milestone[]`，每個 `Milestone` 帶完整 `issues: IssueLite[]`
-- 多了 `allIssues: IssueLite[]`（不限 milestone 範圍；與 `milestones[].issues` 可能重疊）
+- 不帶聚合指標（`completionRate` / `overdueCount` / `nextDueRoadmap` 等）
+- 多了 `roadmaps: Roadmap[]`，每個 `Roadmap` 帶完整 `issues: IssueLite[]`
+- 多了 `allIssues: IssueLite[]`（不限 roadmap 範圍；與 `roadmaps[].issues` 可能重疊）
 
 ---
 
-## Milestone
+## Roadmap
 
 ### 狀態機
 
@@ -99,7 +99,7 @@ hasMilestones desc, name asc
 | `"open"` | 進行中（可能逾期）|
 | `"closed"` | 已關閉（可能是 done，也可能是 cancelled —— GitHub 不區分）|
 
-UI 層在 `apps/web/src/utils/progress.ts::deriveMilestoneStatus` 把 `state` + `dueOn` 推導為 4 類：
+UI 層在 `apps/web/src/utils/progress.ts::deriveRoadmapStatus` 把 `state` + `dueOn` 推導為 4 類：
 
 ```
 state = 'closed'                → 'done'
@@ -117,7 +117,7 @@ completion = (openIssues + closedIssues === 0) ? 0 : closedIssues / (openIssues 
 ```
 
 - 值域 **[0, 1]**，永遠不是 `null` 或 `undefined`
-- 空 milestone（剛建立、還沒 issue）= `0`（**不是 null**；`ProgressBar` 直接乘算）
+- 空 roadmap（剛建立、還沒 issue）= `0`（**不是 null**；`ProgressBar` 直接乘算）
 - 後端 `DashboardService.computeCompletion` 與前端 `apps/web/src/utils/progress.ts::computeCompletion` 各有一份實作，邊界行為必須一致
 
 ### 時間欄位
@@ -148,7 +148,7 @@ completion = (openIssues + closedIssues === 0) ? 0 : closedIssues / (openIssues 
 
 ---
 
-## `nextDueMilestone` 的選取邏輯
+## `nextDueRoadmap` 的選取邏輯
 
 在 `apps/api/src/dashboard/dashboard.service.ts::buildRepoBundle`（或同功能 method）：
 
@@ -159,17 +159,17 @@ const nextDue = openMs
 ```
 
 定義：
-- **僅看 open milestone**
+- **僅看 open roadmap**
 - **僅看有 `dueOn` 的**
 - **按 dueOn 升序**取第一個（即最接近的 —— 可能已逾期也可能未到）
 
-結果可能是「逾期最久的」，這是設計：UI 需要知道「下一個應該關注的 milestone」，逾期的優先級最高。
+結果可能是「逾期最久的」，這是設計：UI 需要知道「下一個應該關注的 roadmap」，逾期的優先級最高。
 
 ---
 
-## MilestoneIssuesPage（分頁端點）
+## RoadmapIssuesPage（分頁端點）
 
-`GET /api/repos/:owner/:name/milestones/:number/issues?page=&perPage=` 的回傳：
+`GET /api/repos/:owner/:name/roadmaps/:number/issues?page=&perPage=` 的回傳：
 
 ```
 { items: IssueLite[], page, perPage, total, hasMore }
@@ -177,10 +177,10 @@ const nextDue = openMs
 
 - `page` 1-indexed；預設 1
 - `perPage` 預設 20（後端限制上限看 DTO）
-- `total` 該 milestone 的**過濾後** issue 總數（扣除 PR 與 SENSITIVE_LABELS）
+- `total` 該 roadmap 的**過濾後** issue 總數（扣除 PR 與 SENSITIVE_LABELS）
 - `hasMore` = `page * perPage < total`
 
-此端點為**大型 milestone** 設計；小 milestone 直接讀 `RepoDetail.milestones[].issues` 即可。
+此端點為**大型 roadmap** 設計；小 roadmap 直接讀 `RepoDetail.roadmaps[].issues` 即可。
 
 ---
 
@@ -189,7 +189,7 @@ const nextDue = openMs
 （詳見 `.claude/rules/data-contract.rule.md`）
 
 1. 改 `shared/src/index.ts` → `pnpm build:shared` → 同步改 `DashboardService` 產出端
-2. 同步改 web 所有消費端（Grep `Summary`、`RepoSummary`、`Milestone`、`IssueLite`）
+2. 同步改 web 所有消費端（Grep `Summary`、`RepoSummary`、`Roadmap`、`IssueLite`）
 3. 本文件（`json-schema.md`）要同步更新「邊界」「排序」「保證」段落
 4. `pnpm typecheck` 跨三個 workspace 全過
 5. 本地 `pnpm dev:api` 起後端，`curl` 驗 JSON 長相

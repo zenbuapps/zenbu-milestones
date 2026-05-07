@@ -1,6 +1,6 @@
-# 提示詞：讓訪客透過 Zenbu Milestones 提交 GitHub Issue（V1）
+# 提示詞：讓訪客透過 Zenbu Roadmaps 提交 GitHub Issue（V1）
 
-> **給 planner 的指示**：這份需求會讓 `zenbu-milestones` 專案從**純靜態儀表板**翻轉為**前後分離 + DB 的應用**。舊版 `specs/visitor-issue-submission/plan.md`（Cloudflare Worker + Turnstile 匿名投稿方案）作廢，請不要沿用其架構。
+> **給 planner 的指示**：這份需求會讓 `zenbu-roadmaps` 專案從**純靜態儀表板**翻轉為**前後分離 + DB 的應用**。舊版 `specs/visitor-issue-submission/plan.md`（Cloudflare Worker + Turnstile 匿名投稿方案）作廢，請不要沿用其架構。
 > 本文件用「已作廢：X」標示被推翻的原需求，請 planner 不要照舊實作；用「Open Question」標示需要在 plan 階段決策或回頭問用戶的點。
 
 ---
@@ -8,7 +8,7 @@
 ## 一、目標與範圍
 
 ### 一句話需求
-讓使用者以 Google 帳號登入 `zenbu-milestones` 網站後，可對 `zenbuapps` 組織下**任一公開 repo** 提交 issue 草稿，草稿進入後端 DB 待管理員審核，審核通過後才由後端代為轉送成真的 GitHub issue。
+讓使用者以 Google 帳號登入 `zenbu-roadmaps` 網站後，可對 `zenbuapps` 組織下**任一公開 repo** 提交 issue 草稿，草稿進入後端 DB 待管理員審核，審核通過後才由後端代為轉送成真的 GitHub issue。
 
 ### 架構翻轉（重要）
 - **原架構**（現況 + 舊 plan）：純靜態 SPA、build-time fetch、無後端、無 DB
@@ -19,7 +19,7 @@
 
 ### V1 範圍
 - Google OAuth 登入
-- 所有 `zenbuapps` 非 archived、非 private 的 repo 都可提交 issue（不再限制「有 milestone」）
+- 所有 `zenbuapps` 非 archived、非 private 的 repo 都可提交 issue（不再限制「有 roadmap」）
 - 每個 repo roadmap 頁：提交 issue 按鈕 + repo 的 issue 列表（含搜尋 / filter）
 - Issue 草稿 → DB（status = pending）→ 管理員審核 → 通過後由後端代呼 GitHub API 轉送
 - 使用者個人選單：「我的 issue 管理」頁，可看自己發過的 issue 與各自狀態
@@ -63,12 +63,12 @@
 - ~~已作廢：使用者發表後「即時打 GitHub API + 自動掛 `待審核` label」~~ → 改為先寫 DB（狀態 = pending），審核通過後才由後端代呼 GitHub API 轉送
 - ~~已作廢：「`待審核`」以 GitHub label 形式存在於 GitHub issue 上~~ → 在 V1，`待審核` 改為 DB 的 status 欄位；是否在轉送到 GitHub 時額外加來源 label，見 Open Question 5-1
 - ~~已作廢：舊版 plan 中的 Cloudflare Worker + Turnstile 匿名投稿方案~~ → 以新的 NestJS + Google OAuth 取代
-- ~~已作廢：列出所有 repo 時僅限「有 milestone 的 repo」~~ → 改為所有 `zenbuapps` 非 archived、非 private 的 repo 都列出且可投稿
+- ~~已作廢：列出所有 repo 時僅限「有 roadmap 的 repo」~~ → 改為所有 `zenbuapps` 非 archived、非 private 的 repo 都列出且可投稿
 
 **保留沿用自原需求**：
 - Issue 列表 UI（repo 當前 issues）＋ 搜尋 / filter（參考 GitHub issues filter）
 - Markdown 編輯器盡量貼近 GitHub 體驗
-- 不支援使用者指派 milestone / 標籤 label（提交者不可自選 label）
+- 不支援使用者指派 roadmap / 標籤 label（提交者不可自選 label）
 - 列出所有 `zenbuapps` org 的 repo 供選擇投稿
 
 ---
@@ -107,7 +107,7 @@
 **搜尋 / filter 能力**（V1 必備，參考 GitHub issues UI）：
 - 依狀態過濾：`open` / `closed` / `all`
 - 依 label 過濾
-- 依 milestone 過濾
+- 依 roadmap 過濾
 - 依 assignee 過濾（若資料有）
 - 關鍵字搜尋（標題 + body）
 
@@ -143,7 +143,7 @@
 ### 4.6 列出所有 repo + 管理員控制投稿可見性
 
 #### 顯示層（所有使用者都看得到）
-- Overview 頁 / Sidebar：列出 `zenbuapps` org **所有** repo（不再限制「有 milestone」；是否過濾 archived / private 見下）
+- Overview 頁 / Sidebar：列出 `zenbuapps` org **所有** repo（不再限制「有 roadmap」；是否過濾 archived / private 見下）
 - 更新 `scripts/fetch-data.ts` 的過濾邏輯
 
 #### 投稿控制層（V1 必做，管理員獨有）
@@ -162,7 +162,7 @@
 
 ## 五、流程（happy path）
 
-1. 使用者以 Google 帳號登入 `zenbu-milestones`
+1. 使用者以 Google 帳號登入 `zenbu-roadmaps`
 2. 瀏覽 `zenbuapps/wp-power-course` 的 roadmap 頁，點「提出 issue」
 3. 填寫標題 + Markdown 內容（可選附件），送出
 4. 後端 `POST /api/issues` → 寫入 DB（status = pending）
@@ -185,7 +185,7 @@
 ### 專案結構
 **Open Question 6-2**：既有前端專案（單 repo）+ 新 NestJS 後端，結構候選：
 - A｜Monorepo（pnpm workspaces，前端 + 後端同一 repo）— 推薦，方便共用型別
-- B｜另開後端 repo（例：`zenbu-milestones-api`）— 邊界清楚但型別要複製
+- B｜另開後端 repo（例：`zenbu-roadmaps-api`）— 邊界清楚但型別要複製
 - C｜NestJS 後端放在當前 repo 的 `server/` 子目錄，調整 CI
 
 ### 部署位置
@@ -353,7 +353,7 @@ planner 可依選用的 ORM / DB 調整，但**欄位語意不要改**。
 | 4-5-1 | V1 審核介面完整度 | API only / 最小 admin 頁 / 完整 admin 頁 | 最小 admin 頁（三分頁：issue 審核 / repo 設定 / 使用者權限） |
 | 4-6-1 | archived / private repo 預設 visibleOnUI | 皆顯示 / archived 隱藏 / 兩者都隱藏 | archived 預設 `visibleOnUI=false`；private 不納入 |
 | 4-6-2 | 新 repo 首次被 fetcher 發現時 repo_settings 初始化 | upsert / 不動 / 管理員手動 | fetcher 每輪 upsert（不存在才 insert，預設全 true） |
-| 5-1 | 轉送到 GitHub 時是否加來源 label（例：`via-zenbu-milestones`） | 加 / 不加 | 加（方便追溯來源） |
+| 5-1 | 轉送到 GitHub 時是否加來源 label（例：`via-zenbu-roadmaps`） | 加 / 不加 | 加（方便追溯來源） |
 | 6-1 | DB 技術棧 | PostgreSQL / MySQL / SQLite | PostgreSQL |
 | 6-2 | 專案結構 | Monorepo / 另開 repo / `server/` 子目錄 | Monorepo（pnpm workspaces） |
 | 6-3 | 後端 / DB 部署位置 | Railway / Render / Fly.io / 自架 | planner 列比較表 |
@@ -369,7 +369,7 @@ planner 可依選用的 ORM / DB 調整，但**欄位語意不要改**。
 > 這段幫 planner 預熱衝擊點，避免動到既有契約時失控。
 
 - **`src/data/types.ts`** 是 build-time fetcher 與 SPA 之間的契約（見 `.claude/rules/data-contract.rule.md`）。若為新 UI 新增欄位，三端必須同步改。
-- **Vite base path**：任何 URL 不得 hard-code `/zenbu-milestones/`，一律走 `import.meta.env.BASE_URL`（見 `.claude/rules/vite-base-path.rule.md`）。前端呼叫 NestJS 後端時要考量 dev / prod 環境不同 base URL，用 `import.meta.env.VITE_API_BASE_URL` 之類 env var。
+- **Vite base path**：任何 URL 不得 hard-code `/zenbu-roadmaps/`，一律走 `import.meta.env.BASE_URL`（見 `.claude/rules/vite-base-path.rule.md`）。前端呼叫 NestJS 後端時要考量 dev / prod 環境不同 base URL，用 `import.meta.env.VITE_API_BASE_URL` 之類 env var。
 - **HashRouter**：不可改 BrowserRouter（GitHub Pages 限制），新頁面都用 hash path。
 - **樣式**：所有新 UI 必須優先用既有 CSS variable + `.btn-primary` / `.card` 等 class 元件，禁 emoji，圖示用 `lucide-react`（見 `.claude/rules/styling-system.rule.md`）。
 - **套件管理**：pnpm only；若做 monorepo 要改 `pnpm-workspace.yaml`（見 `.claude/rules/pnpm-and-ci.rule.md`）。
@@ -383,7 +383,7 @@ planner 可依選用的 ORM / DB 調整，但**欄位語意不要改**。
 planner 應在 `specs/visitor-issue-submission/plan.md` 產出：
 
 1. **架構圖**（前端 / fetcher / NestJS / DB / GitHub API / Bunny CDN 的資料流）
-2. **Milestone 切分**：V1 的合理拆法（建議：M1 = OAuth + DB + 提交 API；M2 = 前端表單 + Modal/Drawer；M3 = 我的 issue 管理頁；M4 = 管理員後台三分頁（issue 審核 / repo 設定 / 使用者權限）+ GitHub 轉送；M5 = 附件；M6 = issue 列表搜尋 / filter）
+2. **Roadmap 切分**：V1 的合理拆法（建議：M1 = OAuth + DB + 提交 API；M2 = 前端表單 + Modal/Drawer；M3 = 我的 issue 管理頁；M4 = 管理員後台三分頁（issue 審核 / repo 設定 / 使用者權限）+ GitHub 轉送；M5 = 附件；M6 = issue 列表搜尋 / filter）
 3. **Open Questions 的建議解答 + 影響分析**
 4. **風險登記表**（GitHub API rate limit、secret 洩漏、CORS、session 一致性、fetcher vs runtime 資料延遲⋯⋯）
 5. **前置作業 checklist**（第一項必須是：rotate `BUNNY_STORAGE_PASSWORD`；第二項：簽發 `ZENBU_ORG_WRITE_TOKEN`）

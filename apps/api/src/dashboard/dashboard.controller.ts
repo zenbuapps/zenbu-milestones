@@ -7,13 +7,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type {
-  MilestoneIssuesPage,
+  RoadmapIssuesPage,
   RepoDetail,
   Summary,
 } from 'shared';
 import { AuthenticatedGuard } from '../common/guards/authenticated.guard';
 import { DashboardService } from './dashboard.service';
-import { MilestoneIssuesQueryDto } from './dto/milestone-issues-query.dto';
+import { RoadmapIssuesQueryDto } from './dto/roadmap-issues-query.dto';
 
 interface ApiSuccess<T> {
   success: true;
@@ -32,7 +32,7 @@ const DEFAULT_PER_PAGE = 50;
  * Phase 2 runtime API 共三個 GET：
  *   GET /api/summary
  *   GET /api/repos/:owner/:name/detail
- *   GET /api/repos/:owner/:name/milestones/:number/issues?page=&perPage=
+ *   GET /api/repos/:owner/:name/roadmaps/:number/issues?page=&perPage=
  *
  * 全部套 AuthenticatedGuard（未登入 → 401，與 IssuesController 相同）。
  * 回傳統一包 `{ success: true, data }` envelope（與 IssuesController / AdminIssuesController 對齊）。
@@ -63,19 +63,19 @@ export class DashboardController {
     return { success: true, data };
   }
 
-  @Get('repos/:owner/:name/milestones/:number/issues')
-  async getMilestoneIssues(
+  @Get('repos/:owner/:name/roadmaps/:number/issues')
+  async getRoadmapIssues(
     @Param('owner') owner: string,
     @Param('name') name: string,
-    @Param('number', new ParseIntPipe()) milestoneNumber: number,
-    @Query() query: MilestoneIssuesQueryDto,
-  ): Promise<ApiSuccess<MilestoneIssuesPage>> {
+    @Param('number', new ParseIntPipe()) roadmapNumber: number,
+    @Query() query: RoadmapIssuesQueryDto,
+  ): Promise<ApiSuccess<RoadmapIssuesPage>> {
     const page = query.page ?? DEFAULT_PAGE;
     const perPage = query.perPage ?? DEFAULT_PER_PAGE;
-    const data = await this.dashboard.getMilestoneIssues(
+    const data = await this.dashboard.getRoadmapIssues(
       owner,
       name,
-      milestoneNumber,
+      roadmapNumber,
       page,
       perPage,
     );

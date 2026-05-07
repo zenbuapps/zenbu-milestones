@@ -1,10 +1,10 @@
 import { AlertTriangle, CheckCircle2, Circle, Clock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { MilestoneDerivedStatus } from 'shared';
+import type { RoadmapDerivedStatus } from 'shared';
 
 type TStatusBadgeProps = {
-  /** milestone 推導狀態 */
-  status: MilestoneDerivedStatus;
+  /** roadmap 推導狀態 */
+  status: RoadmapDerivedStatus;
 };
 
 type TBadgeStyle = {
@@ -13,7 +13,7 @@ type TBadgeStyle = {
   icon: LucideIcon;
 };
 
-const STYLE_MAP: Record<MilestoneDerivedStatus, TBadgeStyle> = {
+const STYLE_MAP: Record<RoadmapDerivedStatus, TBadgeStyle> = {
   done: {
     label: '已完成',
     className: 'bg-green-50 text-green-600',
@@ -37,7 +37,7 @@ const STYLE_MAP: Record<MilestoneDerivedStatus, TBadgeStyle> = {
 };
 
 /**
- * Milestone 狀態標籤
+ * Roadmap 狀態標籤
  * 依 4 種推導狀態顯示對應顏色的 pill badge
  */
 const StatusBadge = ({ status }: TStatusBadgeProps) => {

@@ -1,6 +1,6 @@
-# Zenbu Milestones
+# Zenbu Roadmaps
 
-pnpm monorepo：視覺化呈現 [`zenbuapps`](https://github.com/zenbuapps) GitHub 組織底下所有 repo 的 milestones 與 issues，並提供訪客投稿 issue → admin 審核 → 轉發至 GitHub 的工作流程。
+pnpm monorepo：視覺化呈現 [`zenbuapps`](https://github.com/zenbuapps) GitHub 組織底下所有 repo 的 roadmaps 與 issues，並提供訪客投稿 issue → admin 審核 → 轉發至 GitHub 的工作流程。
 
 > **狀態**：舊 GitHub Pages 靜態部署已於 2026-04-21 退役，前端部署平台遷移計畫待定。詳見下方「部署」段落。
 
@@ -60,7 +60,7 @@ pnpm dev:all              # 前端 + 後端 + shared watch 一起跑
 ### 三個 workspace
 
 ```
-zenbu-milestones/
+zenbu-roadmaps/
 ├── apps/
 │   ├── web/       # Vite SPA
 │   └── api/       # NestJS backend
@@ -91,7 +91,7 @@ zenbu-milestones/
 `apps/web/src/App.tsx` 使用 `HashRouter`（舊 GitHub Pages 部署遺留）：
 
 - `/` → `OverviewPage`（所有 repo）
-- `#/repo/:name` → `RoadmapPage`（單一 repo 的 milestone / issue）
+- `#/repo/:name` → `RoadmapPage`（單一 repo 的 roadmap / issue）
 
 新部署平台確定後可改回 `BrowserRouter`。
 
@@ -101,7 +101,7 @@ zenbu-milestones/
 
 | 項目 | 值 |
 |---|---|
-| 公開 URL | <https://local-milestones.powerhouse.tw> |
+| 公開 URL | <https://local-roadmaps.powerhouse.tw> |
 | 指向本地 | `http://localhost:3000` |
 | Tunnel 名稱 | `turbo-local` |
 | Tunnel UUID | `fdf28065-c202-42d4-89dd-0440dd18cefd` |
@@ -113,7 +113,7 @@ zenbu-milestones/
 cloudflared tunnel run turbo-local
 ```
 
-啟動後，任何送往 `https://local-milestones.powerhouse.tw` 的請求會經由 Cloudflare edge 轉發至本機 `localhost:3000`。若後端尚未啟動會收到 HTTP 502（預期行為）。
+啟動後，任何送往 `https://local-roadmaps.powerhouse.tw` 的請求會經由 Cloudflare edge 轉發至本機 `localhost:3000`。若後端尚未啟動會收到 HTTP 502（預期行為）。
 
 ### 修改 ingress 後重啟
 
@@ -134,7 +134,7 @@ cloudflared tunnel route dns turbo-local <new-hostname>.powerhouse.tw
 
 ### 命名限制
 
-**Hostname 必須為單層子網域**（如 `local-milestones.powerhouse.tw`），**不可使用多層**（如 `local.milestones.powerhouse.tw`）。Cloudflare Universal SSL 僅涵蓋 `*.powerhouse.tw` 單層通配，雙層子網域在 TLS handshake 階段會失敗。沿用 dash 連接的慣例以確保 SSL 涵蓋。
+**Hostname 必須為單層子網域**（如 `local-roadmaps.powerhouse.tw`），**不可使用多層**（如 `local.roadmaps.powerhouse.tw`）。Cloudflare Universal SSL 僅涵蓋 `*.powerhouse.tw` 單層通配，雙層子網域在 TLS handshake 階段會失敗。沿用 dash 連接的慣例以確保 SSL 涵蓋。
 
 ## 部署
 
@@ -167,6 +167,6 @@ NestJS 尚未部署至雲端，僅本地開發 + Cloudflare Tunnel 對外。候�
 
 - `packages/shared` 動過任何 export 後，下游（web / api）要重新 build shared 才拿得到新型別（或開 `pnpm dev:shared` watch 模式）。
 - `apps/api/prisma/schema.prisma` 動過 model 或 enum 後，記得先 `pnpm prisma:generate` 再 build，否則 `@prisma/client` 型別不會同步。
-- `Milestone.completion` 對空 milestone 回傳 `0`（不是 `null`），下游元件依賴此保證。
+- `Roadmap.completion` 對空 roadmap 回傳 `0`（不是 `null`），下游元件依賴此保證。
 - `IssueLite.labels[].name` 保證非空（fetcher 已過濾）；`color` 為 6 位 hex（無 `#`）。
 - Cloudflare Tunnel hostname 限制：**單層子網域**（見上節）。

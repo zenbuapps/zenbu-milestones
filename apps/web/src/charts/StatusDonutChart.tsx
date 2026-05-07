@@ -8,7 +8,7 @@ type TStatusDonutChartProps = {
 };
 
 /**
- * Milestone 狀態分布甜甜圈圖
+ * Roadmap 狀態分布甜甜圈圖
  * 4 種狀態顏色分別為：完成=綠、進行中=藍、逾期=橘、未排程=灰
  */
 const StatusDonutChart = ({
@@ -60,7 +60,7 @@ const StatusDonutChart = ({
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-10">
         <div className="text-2xl font-semibold text-[--color-text-primary]">{total}</div>
-        <div className="text-xs text-[--color-text-muted]">總 Milestones</div>
+        <div className="text-xs text-[--color-text-muted]">總 Roadmaps</div>
       </div>
     </div>
   );

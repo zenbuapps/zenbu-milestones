@@ -157,33 +157,33 @@ export interface AuditLogRow {
 }
 
 // ===========================================================================
-// Dashboard data — milestones / issues / repo summary
+// Dashboard data — roadmaps / issues / repo summary
 // ===========================================================================
 // 原位於 apps/web/src/data/types.ts（Phase 2 搬入 shared 成為前後端共同契約）。
-// 後端 /api/summary、/api/repos/:owner/:name/detail、/api/repos/:owner/:name/milestones/:number/issues
+// 後端 /api/summary、/api/repos/:owner/:name/detail、/api/repos/:owner/:name/roadmaps/:number/issues
 // 的 response 皆以這些 interface 為準。
 
-/** GitHub Milestone 原生狀態 */
-export type MilestoneState = 'open' | 'closed';
+/** GitHub Roadmap 原生狀態 */
+export type RoadmapState = 'open' | 'closed';
 
 /** UI 使用的分類狀態，由後端 / SPA 依 state + dueOn + issue 計數推導 */
-export type MilestoneDerivedStatus = 'done' | 'in_progress' | 'overdue' | 'no_due';
+export type RoadmapDerivedStatus = 'done' | 'in_progress' | 'overdue' | 'no_due';
 
 /** Summary 層級的整體統計 */
 export interface Totals {
-  /** 至少有一個 milestone 的 repo 數 */
+  /** 至少有一個 roadmap 的 repo 數 */
   repos: number;
-  /** 掃到的所有 repo 數（含沒有 milestone 的） */
+  /** 掃到的所有 repo 數（含沒有 roadmap 的） */
   allRepos: number;
-  milestones: number;
-  openMilestones: number;
-  closedMilestones: number;
-  overdueMilestones: number;
+  roadmaps: number;
+  openRoadmaps: number;
+  closedRoadmaps: number;
+  overdueRoadmaps: number;
   openIssues: number;
   closedIssues: number;
 }
 
-/** Repo 在 Overview 頁的 Card 視圖資料。為了節省傳輸量不含完整 milestones */
+/** Repo 在 Overview 頁的 Card 視圖資料。為了節省傳輸量不含完整 roadmaps */
 export interface RepoSummary {
   /** Repo 名稱（不含 owner，owner 隱含為 zenbuapps）*/
   name: string;
@@ -193,20 +193,20 @@ export interface RepoSummary {
   language: string | null;
   /** ISO 8601 */
   updatedAt: string;
-  milestoneCount: number;
-  openMilestoneCount: number;
-  closedMilestoneCount: number;
+  roadmapCount: number;
+  openRoadmapCount: number;
+  closedRoadmapCount: number;
   overdueCount: number;
-  /** 0–1；若 milestoneCount === 0 回傳 0（不是 null）*/
+  /** 0–1；若 roadmapCount === 0 回傳 0（不是 null）*/
   completionRate: number;
   openIssues: number;
   closedIssues: number;
-  /** null 代表沒有「未來到期」的 milestone */
-  nextDueMilestone: NextDueMilestone | null;
+  /** null 代表沒有「未來到期」的 roadmap */
+  nextDueRoadmap: NextDueRoadmap | null;
 }
 
-/** RepoSummary.nextDueMilestone 的內容 */
-export interface NextDueMilestone {
+/** RepoSummary.nextDueRoadmap 的內容 */
+export interface NextDueRoadmap {
   number: number;
   title: string;
   /** ISO 8601 */
@@ -219,7 +219,7 @@ export interface Summary {
   /** ISO 8601，snapshot 產生時間 */
   generatedAt: string;
   totals: Totals;
-  /** 排序：milestoneCount > 0 的優先，其次以 name.localeCompare() 字母序 */
+  /** 排序：roadmapCount > 0 的優先，其次以 name.localeCompare() 字母序 */
   repos: RepoSummary[];
 }
 
@@ -248,12 +248,12 @@ export interface IssueLite {
   closedAt: string | null;
 }
 
-/** 單個 milestone 的完整資料（含 issues） */
-export interface Milestone {
+/** 單個 roadmap 的完整資料（含 issues） */
+export interface Roadmap {
   number: number;
   title: string;
   description: string | null;
-  state: MilestoneState;
+  state: RoadmapState;
   /** ISO 8601；沒設到期日為 null */
   dueOn: string | null;
   createdAt: string;
@@ -262,7 +262,7 @@ export interface Milestone {
   /** GitHub 原始計數（不受 SENSITIVE_LABELS 過濾影響） */
   openIssues: number;
   closedIssues: number;
-  /** closedIssues / (openIssues + closedIssues)；空 milestone 回 0（不是 null） */
+  /** closedIssues / (openIssues + closedIssues)；空 roadmap 回 0（不是 null） */
   completion: number;
   htmlUrl: string;
   /** 已過濾 PR 與 SENSITIVE_LABELS 後的 issue 陣列 */
@@ -278,12 +278,12 @@ export interface RepoDetail {
   language: string | null;
   /** ISO 8601 */
   updatedAt: string;
-  milestones: Milestone[];
+  roadmaps: Roadmap[];
   /**
-   * 該 repo 全部 open + closed issues（不限 milestone）
+   * 該 repo 全部 open + closed issues（不限 roadmap）
    * 排除 PR 與 SENSITIVE_LABELS 的 issue，依 updatedAt desc 排序
-   * - 與 milestones[].issues 可能有重疊（同一 issue 若有 milestone 會兩邊都出現）
-   * - 消費端（RepoIssueList）獨立呈現，不與 milestone 視圖混用
+   * - 與 roadmaps[].issues 可能有重疊（同一 issue 若有 roadmap 會兩邊都出現）
+   * - 消費端（RepoIssueList）獨立呈現，不與 roadmap 視圖混用
    */
   allIssues: IssueLite[];
 }
@@ -321,16 +321,16 @@ export interface RefreshDataResult {
 }
 
 /**
- * `GET /api/repos/:owner/:name/milestones/:number/issues` response（分頁）。
- * 為大型 milestone 做的 fallback；小 milestone 直接走 RepoDetail.milestones[].issues 即可。
+ * `GET /api/repos/:owner/:name/roadmaps/:number/issues` response（分頁）。
+ * 為大型 roadmap 做的 fallback；小 roadmap 直接走 RepoDetail.roadmaps[].issues 即可。
  */
-export interface MilestoneIssuesPage {
+export interface RoadmapIssuesPage {
   items: IssueLite[];
   /** 當前頁碼（1-indexed）*/
   page: number;
   /** 每頁筆數 */
   perPage: number;
-  /** 該 milestone 的總 issue 數（已過濾） */
+  /** 該 roadmap 的總 issue 數（已過濾） */
   total: number;
   /** 是否還有下一頁 */
   hasMore: boolean;
@@ -341,8 +341,8 @@ export const API_PATHS = {
   summary: '/api/summary',
   repoDetail: (owner: string, name: string) =>
     `/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/detail`,
-  milestoneIssues: (owner: string, name: string, milestoneNumber: number) =>
-    `/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/milestones/${milestoneNumber}/issues`,
+  roadmapIssues: (owner: string, name: string, roadmapNumber: number) =>
+    `/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/roadmaps/${roadmapNumber}/issues`,
   adminRefresh: '/api/admin/refresh-data',
   githubHealth: '/api/health/github',
 } as const;

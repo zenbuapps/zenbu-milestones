@@ -7,15 +7,15 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { Milestone, MilestoneDerivedStatus } from 'shared';
+import type { Roadmap, RoadmapDerivedStatus } from 'shared';
 import { daysUntil, formatDate, formatRelative } from '../utils/date';
-import { deriveMilestoneStatus } from '../utils/progress';
+import { deriveRoadmapStatus } from '../utils/progress';
 import IssueList from './IssueList';
 import ProgressBar from './ProgressBar';
 import StatusBadge from './StatusBadge';
 
-type TMilestoneNodeProps = {
-  milestone: Milestone;
+type TRoadmapNodeProps = {
+  roadmap: Roadmap;
   expanded: boolean;
   onToggle: () => void;
 };
@@ -25,14 +25,14 @@ type TDotStyle = {
   icon: LucideIcon;
 };
 
-const DOT_STYLE: Record<MilestoneDerivedStatus, TDotStyle> = {
+const DOT_STYLE: Record<RoadmapDerivedStatus, TDotStyle> = {
   done: { bg: 'bg-green-500 text-white', icon: CheckCircle2 },
   in_progress: { bg: 'bg-blue-500 text-white', icon: Clock },
   overdue: { bg: 'bg-orange-500 text-white', icon: AlertTriangle },
   no_due: { bg: 'bg-gray-300 text-white', icon: Circle },
 };
 
-const PROGRESS_COLOR: Record<MilestoneDerivedStatus, 'brand' | 'success' | 'warning' | 'error'> = {
+const PROGRESS_COLOR: Record<RoadmapDerivedStatus, 'brand' | 'success' | 'warning' | 'error'> = {
   done: 'success',
   in_progress: 'brand',
   overdue: 'error',
@@ -40,9 +40,9 @@ const PROGRESS_COLOR: Record<MilestoneDerivedStatus, 'brand' | 'success' | 'warn
 };
 
 /**
- * 依 milestone 狀態決定日期標籤文字
+ * 依 roadmap 狀態決定日期標籤文字
  */
-const renderDateLabel = (m: Milestone, status: MilestoneDerivedStatus) => {
+const renderDateLabel = (m: Roadmap, status: RoadmapDerivedStatus) => {
   if (status === 'done' && m.closedAt) {
     return (
       <span className="text-xs text-[--color-text-muted]">
@@ -69,15 +69,15 @@ const renderDateLabel = (m: Milestone, status: MilestoneDerivedStatus) => {
 };
 
 /**
- * Milestone 時間軸節點
+ * Roadmap 時間軸節點
  * 左側狀態圓點 + 右側卡片（標題、狀態 badge、日期、進度、展開 issues）
  */
-const MilestoneNode = ({ milestone, expanded, onToggle }: TMilestoneNodeProps) => {
-  const status = deriveMilestoneStatus(milestone);
+const RoadmapNode = ({ roadmap, expanded, onToggle }: TRoadmapNodeProps) => {
+  const status = deriveRoadmapStatus(roadmap);
   const dotStyle = DOT_STYLE[status];
   const DotIcon = dotStyle.icon;
-  const totalIssues = milestone.openIssues + milestone.closedIssues;
-  const completionPct = Math.round(milestone.completion * 100);
+  const totalIssues = roadmap.openIssues + roadmap.closedIssues;
+  const completionPct = Math.round(roadmap.completion * 100);
 
   return (
     <div className="relative pb-6 pl-10 last:pb-0 sm:pb-8">
@@ -94,20 +94,20 @@ const MilestoneNode = ({ milestone, expanded, onToggle }: TMilestoneNodeProps) =
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <a
-                href={milestone.htmlUrl}
+                href={roadmap.htmlUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-base font-semibold text-[--color-text-primary] hover:text-[--color-brand]"
               >
-                {milestone.title}
+                {roadmap.title}
                 <ExternalLink size={13} strokeWidth={2} className="text-[--color-text-muted]" />
               </a>
               <StatusBadge status={status} />
             </div>
-            <div className="mt-1">{renderDateLabel(milestone, status)}</div>
-            {milestone.description && (
+            <div className="mt-1">{renderDateLabel(roadmap, status)}</div>
+            {roadmap.description && (
               <p className="mt-2 line-clamp-2 text-xs text-[--color-text-muted]">
-                {milestone.description}
+                {roadmap.description}
               </p>
             )}
           </div>
@@ -117,11 +117,11 @@ const MilestoneNode = ({ milestone, expanded, onToggle }: TMilestoneNodeProps) =
         <div className="mt-3 flex flex-col gap-1.5">
           <div className="flex items-center justify-between text-xs text-[--color-text-secondary]">
             <span>
-              {milestone.closedIssues} / {totalIssues} issues 完成
+              {roadmap.closedIssues} / {totalIssues} issues 完成
             </span>
             <span className="font-semibold text-[--color-text-primary]">{completionPct}%</span>
           </div>
-          <ProgressBar value={milestone.completion} color={PROGRESS_COLOR[status]} />
+          <ProgressBar value={roadmap.completion} color={PROGRESS_COLOR[status]} />
         </div>
 
         {/* 展開按鈕 */}
@@ -141,10 +141,10 @@ const MilestoneNode = ({ milestone, expanded, onToggle }: TMilestoneNodeProps) =
           </button>
         )}
 
-        {expanded && <IssueList issues={milestone.issues} />}
+        {expanded && <IssueList issues={roadmap.issues} />}
       </div>
     </div>
   );
 };
 
-export default MilestoneNode;
+export default RoadmapNode;

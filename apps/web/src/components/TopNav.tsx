@@ -38,7 +38,7 @@ const TopNav = ({ summary, onMenuClick, session, onLogin, onLogout }: TTopNavPro
         <LayoutDashboard size={16} strokeWidth={2.25} />
       </div>
       <span className="text-sm font-semibold text-[--color-text-primary] sm:text-base">
-        Zenbu Milestones
+        Zenbu Roadmaps
       </span>
     </div>
 

@@ -22,7 +22,7 @@
 |---|---|---|
 | `specs/` | **穩定的契約 / 規格** —— 描述「系統的樣子」| 低（architecture 變更才動）|
 | `.claude/rules/*.rule.md` | **操作層規範** —— 描述「寫 code 時該怎麼做」 | 中（新工作模式、新反模式）|
-| `.claude/skills/zenbu-milestones-dashboard/SKILL.md` | **任務入口索引** —— 根據任務類型路由到對應規範 | 低（只在架構大變動時）|
+| `.claude/skills/zenbu-roadmaps-dashboard/SKILL.md` | **任務入口索引** —— 根據任務類型路由到對應規範 | 低（只在架構大變動時）|
 | `.claude/CLAUDE.md` | **專案總綱** —— 30 秒上手所需的最少資訊 | 低 |
 | `serena memories` | AI 擷取式參考資料 | 中 |
 
@@ -30,6 +30,6 @@
 
 1. **描述現況**，不描述未來計畫（那是 issue / PR 的事）
 2. **列出契約**，不寫 tutorial（那是 rules / skill 的事）
-3. **關鍵邊界條件寫清楚**（空 milestone 的 `completion = 0`、`nextDueMilestone = null`、`SENSITIVE_LABELS` 排除後 issue 數不會變）
+3. **關鍵邊界條件寫清楚**（空 roadmap 的 `completion = 0`、`nextDueRoadmap = null`、`SENSITIVE_LABELS` 排除後 issue 數不會變）
 4. **每個檔案 < 300 行**，超過就拆
 5. **過渡期雙軌並存時明確標注**（例如新舊資料源切換期）

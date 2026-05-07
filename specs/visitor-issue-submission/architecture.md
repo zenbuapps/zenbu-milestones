@@ -197,24 +197,24 @@ Q7、Q14、Q16
 
 | # | 方案 | 描述 |
 |---|------|------|
-| A | 所有 public repo 皆可 | 最寬鬆；可能散佈提交入口到無 milestone 的 repo，污染回饋品質 |
-| B | **Fetcher 計算 `canSubmitIssue` + OverviewPage 兩區塊** | 新增 `RepoSummary.canSubmitIssue`，V1 規則：`!isPrivate && milestoneCount > 0` |
-| C | 讀取 `.github/zenbu-milestones.yml` 自訂開關 | 最彈性；但 fetcher 要多抓一次，且 maintainer 要額外維護設定檔 |
+| A | 所有 public repo 皆可 | 最寬鬆；可能散佈提交入口到無 roadmap 的 repo，污染回饋品質 |
+| B | **Fetcher 計算 `canSubmitIssue` + OverviewPage 兩區塊** | 新增 `RepoSummary.canSubmitIssue`，V1 規則：`!isPrivate && roadmapCount > 0` |
+| C | 讀取 `.github/zenbu-roadmaps.yml` 自訂開關 | 最彈性；但 fetcher 要多抓一次，且 maintainer 要額外維護設定檔 |
 | D | 手動 maintain allow-list（hard-code） | 簡單；不具彈性，每加 repo 都要改程式碼 |
 
 ### 最終選擇：**B — Fetcher 計算 canSubmitIssue + OverviewPage 分區**
 
 ### 理由
 
-1. **無額外 fetcher 呼叫**：`isPrivate` 和 `milestoneCount` 都是 fetcher 已有資料
-2. **語意合理**：有 milestone = 這個 repo 正在積極維護，歡迎外部 issue；無 milestone = 可能是 archive / demo / 未正式啟動，不適合外部提交
+1. **無額外 fetcher 呼叫**：`isPrivate` 和 `roadmapCount` 都是 fetcher 已有資料
+2. **語意合理**：有 roadmap = 這個 repo 正在積極維護，歡迎外部 issue；無 roadmap = 可能是 archive / demo / 未正式啟動，不適合外部提交
 3. **UI 明確分流**：OverviewPage 兩區塊，訪客一眼看出哪些可提交
 4. **未來可擴充**：C 方案可作為 V2 補強（見 OQ-001）
 
 ### V1 規則
 
 ```ts
-canSubmitIssue = !repo.isPrivate && milestones.length > 0
+canSubmitIssue = !repo.isPrivate && roadmaps.length > 0
 ```
 
 ### 後端雙重檢查
@@ -240,7 +240,7 @@ Q19
 | # | 方案 | 成本 / 風險 |
 |---|------|-------------|
 | A | **`*.workers.dev` 免費子域 + CORS 白名單** | 免費；DNS 無需額外設定 |
-| B | `api.zenbu-milestones.zenbuapps.dev`（custom domain） | 需要 DNS + Cloudflare Zone + SSL cert；更正式 |
+| B | `api.zenbu-roadmaps.zenbuapps.dev`（custom domain） | 需要 DNS + Cloudflare Zone + SSL cert；更正式 |
 | C | 同 origin（透過 Cloudflare Pages Functions） | 整合 GitHub Pages 與 Worker 成同 origin，省 CORS 複雜度 | 但本專案已在 GitHub Pages，不易遷移 |
 
 ### 最終選擇：**A — workers.dev 免費子域**
@@ -255,7 +255,7 @@ Q19
 ### 建議命名
 
 ```
-https://zenbu-milestones-worker.<cf-account>.workers.dev
+https://zenbu-roadmaps-worker.<cf-account>.workers.dev
 ```
 
 實際子域由 Cloudflare account 決定。CI 部署後記 URL 到 repo secret `VITE_WORKER_URL` 供 Vite build 注入。
@@ -311,7 +311,7 @@ Q2
 
 | # | 方案 | 即時性 | 維運 |
 |---|------|--------|------|
-| A | **Worker fetch `zenbuapps.github.io/zenbu-milestones/data/summary.json`（含 cache）** | cache 內近即時（5 分鐘 stale） | 零維運；同一 source of truth |
+| A | **Worker fetch `zenbuapps.github.io/zenbu-roadmaps/data/summary.json`（含 cache）** | cache 內近即時（5 分鐘 stale） | 零維運；同一 source of truth |
 | B | Worker 每次 request 都呼叫 GitHub API 檢查 repo | 即時 | 多一次 round-trip，2x 延遲 |
 | C | Worker hard-code allow-list | 即時 | 每加 repo 都要改程式碼 + 部署 |
 | D | Worker 用 KV 存 allow-list（定期 sync） | 近即時 | 多一個組件（Cloudflare KV），初始化成本 |
@@ -335,7 +335,7 @@ async function isRepoAllowed(repoName: string): Promise<boolean> {
   if (cached) {
     summary = await cached.json();
   } else {
-    const resp = await fetch('https://zenbuapps.github.io/zenbu-milestones/data/summary.json');
+    const resp = await fetch('https://zenbuapps.github.io/zenbu-roadmaps/data/summary.json');
     summary = await resp.json();
     const cacheResp = new Response(JSON.stringify(summary), {
       headers: { 'Cache-Control': 'max-age=300', 'Content-Type': 'application/json' }
@@ -367,7 +367,7 @@ Q19（衍生）、US-W-002
 | # | 方案 | 優點 | 缺點 |
 |---|------|------|------|
 | A | **本 repo `worker/` 子目錄（monorepo）** | 共用 CI、PAT rotation 同 PR | 主 repo 結構變複雜 |
-| B | 獨立 repo（`zenbu-milestones-worker`） | 解耦、職責清晰 | 跨 repo PR 配對痛苦 |
+| B | 獨立 repo（`zenbu-roadmaps-worker`） | 解耦、職責清晰 | 跨 repo PR 配對痛苦 |
 | C | Cloudflare 的 web UI edit | 最快 | 無 VCS、無 review 流程，不可持續 |
 
 ### 最終選擇：**A — monorepo `worker/` 子目錄**
@@ -375,7 +375,7 @@ Q19（衍生）、US-W-002
 ### 目錄結構（預期）
 
 ```
-zenbu-milestones/
+zenbu-roadmaps/
 ├── src/                          ← 前端（現有）
 ├── scripts/                      ← build-time fetcher（現有）
 ├── public/                       ← static assets + data/（現有）
@@ -446,7 +446,7 @@ Q5
     // ... 其他欄位用合理預設
   };
   ```
-- 以 `Outlet context` 或 React state lifter append 到對應 milestone 的 `issues` 陣列
+- 以 `Outlet context` 或 React state lifter append 到對應 roadmap 的 `issues` 陣列
 
 #### 留言
 

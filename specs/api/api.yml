@@ -1,5 +1,5 @@
 # =============================================================================
-# Zenbu Milestones — Cloudflare Worker Proxy API
+# Zenbu Roadmaps — Cloudflare Worker Proxy API
 #
 # 此檔由 clarifier 流程產出，與 specs/visitor-issue-submission/data-contract.md
 # 為同步契約。任一端變更必須同步另一端，嚴禁單邊演化。
@@ -13,11 +13,11 @@
 openapi: 3.1.0
 
 info:
-  title: Zenbu Milestones Worker API
+  title: Zenbu Roadmaps Worker API
   version: 0.1.0
   summary: 訪客建立 issue / 留言的 Cloudflare Worker proxy。
   description: |
-    Zenbu Milestones 儀表板（GitHub Pages 靜態網站）的寫入管道。
+    Zenbu Roadmaps 儀表板（GitHub Pages 靜態網站）的寫入管道。
 
     **定位**：前端不直接呼叫 GitHub API；所有「建立 issue」與「對既有 issue 留言」
     一律 POST 到本 Worker，由 Worker 代行 GitHub REST v3 呼叫。前端 bundle 絕不
@@ -43,7 +43,7 @@ info:
   # license 欄位暫留空，V1 未決定授權條款
 
 servers:
-  - url: https://zenbu-milestones-api.{account}.workers.dev
+  - url: https://zenbu-roadmaps-api.{account}.workers.dev
     description: |
       生產環境（Cloudflare Workers 免費 workers.dev 子域，ADR-005）。
       實際子域由 wrangler 部署後決定——部署完成後將 URL 寫入 GitHub Actions 的

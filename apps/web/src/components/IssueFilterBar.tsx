@@ -4,7 +4,7 @@ import {
   ChevronDown,
   CircleDot,
   Inbox,
-  Milestone as MilestoneIcon,
+  Milestone as RoadmapIcon,
   Search,
   Tag,
   User,
@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 
 export type TFilterState = 'open' | 'closed' | 'all';
 
-export type TMilestoneFilter = number | 'all' | 'none';
+export type TRoadmapFilter = number | 'all' | 'none';
 
 /**
  * Filter query 狀態
@@ -22,30 +22,30 @@ export type TMilestoneFilter = number | 'all' | 'none';
  * - `state`：open / closed / all
  * - `labels`：已選 label name 陣列（AND 關係；issue 需擁有全部所選 label）
  * - `assignees`：已選 GitHub login 陣列（AND 關係）
- * - `milestoneNumber`：
- *   - `'all'`：不限 milestone
- *   - `'none'`：只顯示未排程（不在任何 milestone 內）
- *   - `number`：指定 milestone number
+ * - `roadmapNumber`：
+ *   - `'all'`：不限 roadmap
+ *   - `'none'`：只顯示未排程（不在任何 roadmap 內）
+ *   - `number`：指定 roadmap number
  */
 export type TFilterQuery = {
   keyword: string;
   state: TFilterState;
   labels: string[];
   assignees: string[];
-  milestoneNumber: TMilestoneFilter;
+  roadmapNumber: TRoadmapFilter;
 };
 
 type TAvailableLabel = { name: string; color: string };
 
-type TAvailableMilestone = { number: number; title: string };
+type TAvailableRoadmap = { number: number; title: string };
 
 export type TIssueFilterBarProps = {
   /** 當前 repo 所有 issue 去重後的 label 選項 */
   availableLabels: TAvailableLabel[];
   /** 當前 repo 所有 issue 去重後的 assignee login 選項 */
   availableAssignees: string[];
-  /** 當前 repo 所有 milestones 選項（由父層取 detail.milestones） */
-  availableMilestones: TAvailableMilestone[];
+  /** 當前 repo 所有 roadmaps 選項（由父層取 detail.roadmaps） */
+  availableRoadmaps: TAvailableRoadmap[];
   /** 各狀態計數（用於 segmented tab 顯示）*/
   counts: { open: number; closed: number; all: number };
   /** 當前 filter 狀態（controlled） */
@@ -81,7 +81,7 @@ const hasActiveFilters = (q: TFilterQuery): boolean =>
   q.state !== 'open' ||
   q.labels.length > 0 ||
   q.assignees.length > 0 ||
-  q.milestoneNumber !== 'all';
+  q.roadmapNumber !== 'all';
 
 const STATE_TABS: { value: TFilterState; label: string; icon: typeof CircleDot }[] = [
   { value: 'open', label: 'Open', icon: CircleDot },
@@ -96,7 +96,7 @@ const STATE_TABS: { value: TFilterState; label: string; icon: typeof CircleDot }
 const IssueFilterBar = ({
   availableLabels,
   availableAssignees,
-  availableMilestones,
+  availableRoadmaps,
   counts,
   query,
   onChange,
@@ -119,8 +119,8 @@ const IssueFilterBar = ({
     onChange({ ...query, assignees });
   };
 
-  const handleMilestone = (milestoneNumber: TMilestoneFilter): void => {
-    onChange({ ...query, milestoneNumber });
+  const handleRoadmap = (roadmapNumber: TRoadmapFilter): void => {
+    onChange({ ...query, roadmapNumber });
   };
 
   const clearAll = (): void => {
@@ -129,7 +129,7 @@ const IssueFilterBar = ({
       state: 'open',
       labels: [],
       assignees: [],
-      milestoneNumber: 'all',
+      roadmapNumber: 'all',
     });
   };
 
@@ -208,10 +208,10 @@ const IssueFilterBar = ({
           selected={query.labels}
           onChange={handleLabels}
         />
-        <MilestoneDropdown
-          options={availableMilestones}
-          selected={query.milestoneNumber}
-          onChange={handleMilestone}
+        <RoadmapDropdown
+          options={availableRoadmaps}
+          selected={query.roadmapNumber}
+          onChange={handleRoadmap}
         />
         <AssigneeDropdown
           options={availableAssignees}
@@ -390,49 +390,49 @@ const LabelDropdown = ({ options, selected, onChange }: TLabelDropdownProps) => 
   );
 };
 
-type TMilestoneDropdownProps = {
-  options: TAvailableMilestone[];
-  selected: TMilestoneFilter;
-  onChange: (next: TMilestoneFilter) => void;
+type TRoadmapDropdownProps = {
+  options: TAvailableRoadmap[];
+  selected: TRoadmapFilter;
+  onChange: (next: TRoadmapFilter) => void;
 };
 
 /**
- * Milestone 單選下拉（含「全部」「未排程」兩個特殊選項）
+ * Roadmap 單選下拉（含「全部」「未排程」兩個特殊選項）
  */
-const MilestoneDropdown = ({ options, selected, onChange }: TMilestoneDropdownProps) => {
+const RoadmapDropdown = ({ options, selected, onChange }: TRoadmapDropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const currentLabel = (() => {
-    if (selected === 'all') return 'Milestone';
+    if (selected === 'all') return 'Roadmap';
     if (selected === 'none') return '未排程';
     const found = options.find((m) => m.number === selected);
-    return found ? `#${found.number} ${found.title}` : 'Milestone';
+    return found ? `#${found.number} ${found.title}` : 'Roadmap';
   })();
 
   const badge = selected === 'all' ? 0 : 1;
 
-  const pick = (value: TMilestoneFilter): void => {
+  const pick = (value: TRoadmapFilter): void => {
     onChange(value);
     setIsOpen(false);
   };
 
   return (
     <DropdownShell
-      triggerIcon={MilestoneIcon}
+      triggerIcon={RoadmapIcon}
       triggerLabel={currentLabel}
       triggerBadge={badge}
-      panelLabel="選擇 milestone"
+      panelLabel="選擇 roadmap"
       isOpen={isOpen}
       onToggle={() => setIsOpen((v) => !v)}
       onClose={() => setIsOpen(false)}
     >
       <ul className="text-xs">
-        <MilestoneItem
+        <RoadmapItem
           label="全部"
           isSelected={selected === 'all'}
           onClick={() => pick('all')}
         />
-        <MilestoneItem
+        <RoadmapItem
           label="未排程"
           isSelected={selected === 'none'}
           onClick={() => pick('none')}
@@ -444,7 +444,7 @@ const MilestoneDropdown = ({ options, selected, onChange }: TMilestoneDropdownPr
           />
         )}
         {options.map((m) => (
-          <MilestoneItem
+          <RoadmapItem
             key={m.number}
             label={`#${m.number} ${m.title}`}
             isSelected={selected === m.number}
@@ -456,13 +456,13 @@ const MilestoneDropdown = ({ options, selected, onChange }: TMilestoneDropdownPr
   );
 };
 
-type TMilestoneItemProps = {
+type TRoadmapItemProps = {
   label: string;
   isSelected: boolean;
   onClick: () => void;
 };
 
-const MilestoneItem = ({ label, isSelected, onClick }: TMilestoneItemProps) => (
+const RoadmapItem = ({ label, isSelected, onClick }: TRoadmapItemProps) => (
   <li>
     <button
       type="button"

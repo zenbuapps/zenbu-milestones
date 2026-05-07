@@ -349,7 +349,7 @@ export function App() {
 }
 ```
 
-`HashRouter` has no `basename` issue on GitHub Pages because everything after `#` is ignored by the host — the Vite `base` handles `/zenbu-milestones/` for asset URLs, and the hash carries the route. Don't set `basename` on `HashRouter` for this case; it's redundant.
+`HashRouter` has no `basename` issue on GitHub Pages because everything after `#` is ignored by the host — the Vite `base` handles `/zenbu-roadmaps/` for asset URLs, and the hash carries the route. Don't set `basename` on `HashRouter` for this case; it's redundant.
 
 ### Sharing `summary` from `AppShell` to child routes
 

@@ -31,18 +31,18 @@ const sortByName = (a: RepoSummary, b: RepoSummary): number =>
 const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProps) => {
   const [showOthers, setShowOthers] = useState<boolean>(false);
 
-  const { withMilestones, withoutMilestones } = useMemo(() => {
+  const { withRoadmaps, withoutRoadmaps } = useMemo(() => {
     if (!summary) {
-      return { withMilestones: [] as RepoSummary[], withoutMilestones: [] as RepoSummary[] };
+      return { withRoadmaps: [] as RepoSummary[], withoutRoadmaps: [] as RepoSummary[] };
     }
     // 先套用 admin 的 visibleOnUI 過濾（hiddenRepos 來自 AppShell 的 /api/repos/settings）
     // hiddenRepos 未提供時視同空 set（fall back 全部顯示）
     const visible = hiddenRepos && hiddenRepos.size > 0
       ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
       : summary.repos;
-    const active = visible.filter((r) => r.milestoneCount > 0).slice().sort(sortByName);
-    const inactive = visible.filter((r) => r.milestoneCount === 0).slice().sort(sortByName);
-    return { withMilestones: active, withoutMilestones: inactive };
+    const active = visible.filter((r) => r.roadmapCount > 0).slice().sort(sortByName);
+    const inactive = visible.filter((r) => r.roadmapCount === 0).slice().sort(sortByName);
+    return { withRoadmaps: active, withoutRoadmaps: inactive };
   }, [summary, hiddenRepos]);
 
   const handleNavClick = () => {
@@ -89,11 +89,11 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
           Repositories
         </div>
 
-        {withMilestones.length === 0 && (
+        {withRoadmaps.length === 0 && (
           <div className="px-3 py-2 text-xs text-[--color-text-muted]">尚無資料</div>
         )}
 
-        {withMilestones.map((repo) => (
+        {withRoadmaps.map((repo) => (
           <NavLink
             key={repo.name}
             to={`/repo/${repo.name}`}
@@ -113,20 +113,20 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
               <span className="truncate">{repo.name}</span>
             </span>
             <span className="flex-shrink-0 rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
-              {repo.milestoneCount}
+              {repo.roadmapCount}
             </span>
           </NavLink>
         ))}
       </nav>
 
-      {withoutMilestones.length > 0 && (
+      {withoutRoadmaps.length > 0 && (
         <div className="mt-auto border-t border-[--color-border] px-3 py-3">
           <button
             type="button"
             onClick={() => setShowOthers((v) => !v)}
             className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium text-[--color-text-muted] transition-colors hover:bg-[--color-surface-overlay]"
           >
-            <span>其他 repos（無 milestone）</span>
+            <span>其他 repos（無 roadmap）</span>
             <ChevronRight
               size={14}
               strokeWidth={2}
@@ -135,7 +135,7 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
           </button>
           {showOthers && (
             <ul className="mt-1 flex flex-col gap-0.5">
-              {withoutMilestones.map((repo) => (
+              {withoutRoadmaps.map((repo) => (
                 <li key={repo.name}>
                   <a
                     href={repo.htmlUrl}

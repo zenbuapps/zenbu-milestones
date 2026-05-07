@@ -14,11 +14,11 @@
 
 任何對以下介面的變更：
 - `Totals`、`Summary`
-- `RepoSummary`、`NextDueMilestone`
+- `RepoSummary`、`NextDueRoadmap`
 - `RepoDetail`
-- `Milestone`、`MilestoneState`、`MilestoneDerivedStatus`
+- `Roadmap`、`RoadmapState`、`RoadmapDerivedStatus`
 - `IssueLite`、`IssueLabel`
-- `MilestoneIssuesPage`、`GithubHealthStatus`、`RefreshDataResult`
+- `RoadmapIssuesPage`、`GithubHealthStatus`、`RefreshDataResult`
 
 必須在同一個 PR / commit 中：
 1. **改 `packages/shared/src/index.ts`**（加 / 減 / 改欄位）
@@ -35,17 +35,17 @@
 - 值域（`completionRate: number;  // 0–1`）
 - 是否可為 null（`description: string | null;`）
 - 格式（`updatedAt: string;  // ISO 8601`）
-- 特殊語意（`nextDueMilestone: NextDueMilestone | null` —— 為 null 代表沒有未來的到期 milestone）
+- 特殊語意（`nextDueRoadmap: NextDueRoadmap | null` —— 為 null 代表沒有未來的到期 roadmap）
 
 理由：當 UI 拿到 response 做運算時，邊界條件（0 / null / 空陣列）會直接決定顯示邏輯。
 
-### 3. `Milestone.completion` 對空 milestone 回傳 0
+### 3. `Roadmap.completion` 對空 roadmap 回傳 0
 
 ```
 completion = total === 0 ? 0 : closedIssues / (openIssues + closedIssues)
 ```
 
-**不可改為 null**。下游元件（`MilestoneNode`、`ProgressBar`）預期收到 number，改成 nullable 會讓所有 `.toFixed()` / 乘算崩掉。
+**不可改為 null**。下游元件（`RoadmapNode`、`ProgressBar`）預期收到 number，改成 nullable 會讓所有 `.toFixed()` / 乘算崩掉。
 `computeCompletion` 邏輯在 `apps/api/src/dashboard/dashboard.service.ts` 與 `apps/web/src/utils/progress.ts` 兩端各有一份實作，兩者的邊界行為必須一致。
 
 ### 4. `IssueLite.labels` 的 `name` 保證非空
@@ -63,7 +63,7 @@ completion = total === 0 ? 0 : closedIssues / (openIssues + closedIssues)
 ### 6. `Summary.repos` 的排序是契約的一部分
 
 `DashboardService.buildSummary` 在回傳前排序：
-- 有 milestone 的 repo 優先（`milestoneCount > 0`）
+- 有 roadmap 的 repo 優先（`roadmapCount > 0`）
 - 同類內依 `name.localeCompare()` 字母序
 
 `Sidebar` 與 `OverviewPage` 會依賴這個排序（雖然 `Sidebar` 有再排一次作為保險）。如果要改排序規則，必須同時更新此 rule 與後端 service / sidebar。
@@ -75,10 +75,10 @@ completion = total === 0 ? 0 : closedIssues / (openIssues + closedIssues)
 `SENSITIVE_LABELS`（目前為 `confidential` / `security` / `internal-only`）定義在 `apps/api/src/dashboard/dashboard.service.ts`。
 
 - 要新增敏感類別：**只需擴充該集合**，不需改 shared 型別（issue 直接從陣列中剔除，client 看不到）
-- **注意**：milestone 的 `openIssues` / `closedIssues` 是 GitHub 回傳的原始計數，**不會**因為 label 過濾而減少。這是故意的 —— 進度百分比仍以 GitHub 的事實為準，只是敏感 issue 的「標題／內文／labels」不會外洩到 API response
+- **注意**：roadmap 的 `openIssues` / `closedIssues` 是 GitHub 回傳的原始計數，**不會**因為 label 過濾而減少。這是故意的 —— 進度百分比仍以 GitHub 的事實為準，只是敏感 issue 的「標題／內文／labels」不會外洩到 API response
 - Cache key 已依 `(owner, name)` 分，清掉要走 `POST /api/admin/refresh-data`
 
-如果未來需要「連 milestone 進度也反映過濾後的數字」：這是一次契約變更，需要同時改 service 的計算邏輯與 `Milestone.openIssues` / `closedIssues` 的語意註解。
+如果未來需要「連 roadmap 進度也反映過濾後的數字」：這是一次契約變更，需要同時改 service 的計算邏輯與 `Roadmap.openIssues` / `closedIssues` 的語意註解。
 
 ---
 

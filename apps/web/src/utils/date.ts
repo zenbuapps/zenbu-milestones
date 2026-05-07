@@ -62,7 +62,7 @@ export const formatRelative = (iso: string): string => {
 };
 
 /**
- * 純「過去時」語意字串（不含「逾期」這類 milestone 專用詞）
+ * 純「過去時」語意字串（不含「逾期」這類 roadmap 專用詞）
  * 用於事件發生時間：建立時間、最後更新時間等
  */
 export const formatTimeAgo = (iso: string): string => {
@@ -87,7 +87,7 @@ export const formatTimeAgo = (iso: string): string => {
 };
 
 /**
- * 判斷 milestone 是否已逾期（dueOn 為 null 視為沒有到期日，不逾期）
+ * 判斷 roadmap 是否已逾期（dueOn 為 null 視為沒有到期日，不逾期）
  */
 export const isOverdue = (dueOn: string | null): boolean => {
   if (!dueOn) return false;

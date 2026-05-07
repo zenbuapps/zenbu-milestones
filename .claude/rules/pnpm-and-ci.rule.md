@@ -73,7 +73,7 @@ pnpm build:shared
 pnpm dev:shared
 ```
 
-### 錯誤：後端 `/api/summary` 抓到的 issue / milestone 比實際少
+### 錯誤：後端 `/api/summary` 抓到的 issue / roadmap 比實際少
 
 **可能原因**：
 1. `createLimiter` 太高 → 觸發 GitHub secondary rate limit → 部分請求靜靜失敗

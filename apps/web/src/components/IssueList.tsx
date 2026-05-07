@@ -15,14 +15,14 @@ const toHexColor = (raw: string): string | undefined => {
 };
 
 /**
- * Milestone 展開後顯示的 issue 清單
+ * Roadmap 展開後顯示的 issue 清單
  * 每列：state icon + #number + title + labels + assignees avatars
  */
 const IssueList = ({ issues }: TIssueListProps) => {
   if (issues.length === 0) {
     return (
       <div className="mt-3 border-l-2 border-[--color-border] pl-4 text-xs text-[--color-text-muted]">
-        此 milestone 尚未有任何 issue
+        此 roadmap 尚未有任何 issue
       </div>
     );
   }

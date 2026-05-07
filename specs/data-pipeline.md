@@ -17,7 +17,7 @@
 - 後端邏輯：`apps/api/src/dashboard/dashboard.service.ts`
 - Cache 層：`apps/api/src/dashboard/dashboard-cache.service.ts`（TTL 5min，prefix delete）
 - HTTP controller：`apps/api/src/dashboard/dashboard.controller.ts`
-- 前端 client：`apps/web/src/data/api.ts`（`fetchSummary` / `fetchRepoDetail` / `fetchMilestoneIssues`）
+- 前端 client：`apps/web/src/data/api.ts`（`fetchSummary` / `fetchRepoDetail` / `fetchRoadmapIssues`）
 - 共用型別：`packages/shared/src/index.ts` 的「Dashboard data」與「Phase 2」sections
 
 ## Endpoints
@@ -26,7 +26,7 @@
 |---|---|---|---|---|
 | `GET` | `/api/summary` | session | `Summary` | 5 min |
 | `GET` | `/api/repos/:owner/:name/detail` | session | `RepoDetail` | 5 min |
-| `GET` | `/api/repos/:owner/:name/milestones/:number/issues?page=&perPage=` | session | `MilestoneIssuesPage` | 5 min |
+| `GET` | `/api/repos/:owner/:name/roadmaps/:number/issues?page=&perPage=` | session | `RoadmapIssuesPage` | 5 min |
 | `GET` | `/api/health/github` | public | `GithubHealthStatus` | no cache |
 | `POST` | `/api/admin/refresh-data` | admin | `RefreshDataResult` | 10s debounce |
 
@@ -34,10 +34,10 @@
 
 ## 商業規則（delegated to `.claude/rules/data-contract.rule.md`）
 
-- `Milestone.completion` 對空 milestone 回 0（不是 null）
-- `Summary.repos` 排序：milestoneCount > 0 優先，同類 `name.localeCompare()`
+- `Roadmap.completion` 對空 roadmap 回 0（不是 null）
+- `Summary.repos` 排序：roadmapCount > 0 優先，同類 `name.localeCompare()`
 - `IssueLite.labels[].name` 非空、`.color` 為 6-hex 無 `#`
-- SENSITIVE_LABELS（`confidential` / `security` / `internal-only`）過濾 issue 內文但**不**改 milestone 計數
+- SENSITIVE_LABELS（`confidential` / `security` / `internal-only`）過濾 issue 內文但**不**改 roadmap 計數
 - 過濾 archived / fork 的 repo、過濾 PR
 
 完整契約與變更流程見 `.claude/rules/data-contract.rule.md`。

@@ -22,11 +22,11 @@ related:
 
 ## 一句話
 
-在 `zenbu-milestones` 儀表板（GitHub Pages 靜態站）上，讓**非 GitHub 登入的訪客**可以直接對 `zenbuapps` 組織旗下的公開 repo 發起「建立 issue」與「留言任何 issue」兩類寫入操作，並同步反映在 GitHub 原生 issue 系統上。
+在 `zenbu-roadmaps` 儀表板（GitHub Pages 靜態站）上，讓**非 GitHub 登入的訪客**可以直接對 `zenbuapps` 組織旗下的公開 repo 發起「建立 issue」與「留言任何 issue」兩類寫入操作，並同步反映在 GitHub 原生 issue 系統上。
 
 ## 為什麼要做
 
-目前儀表板純唯讀，外部使用者看到 milestone / issue 內容後，若想回饋（回報 bug、提新需求、留言追問），必須自行：
+目前儀表板純唯讀，外部使用者看到 roadmap / issue 內容後，若想回饋（回報 bug、提新需求、留言追問），必須自行：
 
 1. 登入 GitHub
 2. 找到對應 repo
@@ -39,7 +39,7 @@ related:
 | 項目 | 說明 |
 |------|------|
 | 建立 issue | 訪客在 Modal 內填 title / body / type，送出後於對應 repo 建立 issue |
-| 留言 issue | 訪客對任一 milestone 下的現有 issue 新增留言 |
+| 留言 issue | 訪客對任一 roadmap 下的現有 issue 新增留言 |
 | Turnstile 驗證 | Cloudflare Turnstile Managed widget，Modal 內嵌，inline 錯誤顯示 |
 | Markdown 編輯器 | `@uiw/react-md-editor`（含預覽、工具列、GFM 支援） |
 | Worker proxy | Cloudflare Worker 作為唯一寫入通道（Turnstile 驗證 + GitHub REST 呼叫） |
@@ -56,7 +56,7 @@ related:
 | 編輯已建立的 issue / 留言 | V1 不做。訪客送出後即失去修改權（符合匿名提交慣例） |
 | 訪客帳號系統 / login | 本質是匿名提交；`body template` 的舉報聯絡方式（選填）為唯一識別管道 |
 | Private repo 提交 | `canSubmitIssue` V1 規則排除 `isPrivate=true` |
-| 無 milestone repo 提交 | `canSubmitIssue` V1 規則排除 `milestoneCount=0`（避免散佈提交入口到大量未維護 repo） |
+| 無 roadmap repo 提交 | `canSubmitIssue` V1 規則排除 `roadmapCount=0`（避免散佈提交入口到大量未維護 repo） |
 | 真即時更新（webhooks） | 維持「每小時 cron fetcher」節奏；樂觀更新補足 UX 落差 |
 | V2 規劃（Bunny CDN 升級、提交配額管理、IP reputation） | 列入 `open-questions.md` |
 
@@ -64,7 +64,7 @@ related:
 
 | Actor | 角色 | 觸發情境 |
 |-------|------|---------|
-| 訪客（Visitor） | 未登入的瀏覽器使用者 | 讀到感興趣的 repo / milestone / issue，想回饋意見 |
+| 訪客（Visitor） | 未登入的瀏覽器使用者 | 讀到感興趣的 repo / roadmap / issue，想回饋意見 |
 | Maintainer | `zenbuapps` org 成員 | 在 GitHub 原生 UI 上收到 `待審核` label 的新 issue，進行分流 / 合併 / 關閉 |
 | CI（GitHub Actions） | 每小時 cron | 照原流程抓資料、產出新 JSON 覆蓋靜態 bundle（訪客新建的 issue 1 小時內反映到儀表板） |
 | Cloudflare Worker | `zenbuapps` 自有 Worker | 代理寫入請求、驗 Turnstile、呼叫 GitHub API、回傳結果 |

@@ -1,4 +1,4 @@
-import type { Milestone, MilestoneDerivedStatus } from 'shared';
+import type { Roadmap, RoadmapDerivedStatus } from 'shared';
 import { isOverdue } from './date';
 
 /**
@@ -12,13 +12,13 @@ export const computeCompletion = (open: number, closed: number): number => {
 };
 
 /**
- * 依 milestone 的 state 與 dueOn 推導 UI 顯示用狀態
+ * 依 roadmap 的 state 與 dueOn 推導 UI 顯示用狀態
  * - done：state = closed
  * - overdue：state = open && dueOn 已過
  * - in_progress：state = open && dueOn 尚未過
  * - no_due：state = open && 沒有 dueOn
  */
-export const deriveMilestoneStatus = (m: Milestone): MilestoneDerivedStatus => {
+export const deriveRoadmapStatus = (m: Roadmap): RoadmapDerivedStatus => {
   if (m.state === 'closed') return 'done';
   if (!m.dueOn) return 'no_due';
   if (isOverdue(m.dueOn)) return 'overdue';

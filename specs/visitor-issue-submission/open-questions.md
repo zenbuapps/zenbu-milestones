@@ -20,22 +20,22 @@ purpose: 明確列出未決項目，禁止 spec 作者腦補
 
 ## OQ-001 — `canSubmitIssue` 的自訂開關機制
 
-**觸發時機**：若 maintainer 希望某些「有 milestone 但不想接受訪客提交」的 repo，或「無 milestone 但想接受訪客回報」的 repo，需要手動覆蓋 V1 規則。
+**觸發時機**：若 maintainer 希望某些「有 roadmap 但不想接受訪客提交」的 repo，或「無 roadmap 但想接受訪客回報」的 repo，需要手動覆蓋 V1 規則。
 
-**V1 現況**：`canSubmitIssue = !isPrivate && milestoneCount > 0`，無法自訂。
+**V1 現況**：`canSubmitIssue = !isPrivate && roadmapCount > 0`，無法自訂。
 
 **候選方案**：
 
 | # | 方案 | 複雜度 |
 |---|------|-------|
-| A | 在 repo 根目錄放 `.github/zenbu-milestones.yml`，fetcher 讀該檔的 `submissions.enabled` 欄位 | 中 |
-| B | 在 `zenbu-milestones` repo 的 `config/repos.yml` 維護 override map | 低（但 repo-wise 擴展性差）|
+| A | 在 repo 根目錄放 `.github/zenbu-roadmaps.yml`，fetcher 讀該檔的 `submissions.enabled` 欄位 | 中 |
+| B | 在 `zenbu-roadmaps` repo 的 `config/repos.yml` 維護 override map | 低（但 repo-wise 擴展性差）|
 | C | 在 repo description 加 magic keyword（例 `[ZENBU_SUBMISSIONS:OFF]`） | 低（醜） |
 | D | 維持 V1 規則，不支援自訂 | 零（但可能需求會回彈） |
 
 **建議**：V1 先 D，V2 實作 A。
 
-**影響**：若 V1 就有特殊 repo 需求，maintainer 只能在 org 層 disable Issues 或把 milestone 清空。
+**影響**：若 V1 就有特殊 repo 需求，maintainer 只能在 org 層 disable Issues 或把 roadmap 清空。
 
 ---
 
@@ -50,7 +50,7 @@ purpose: 明確列出未決項目，禁止 spec 作者腦補
 | # | 方案 | 說明 |
 |---|------|------|
 | A | 單一 production Worker（V1 選項） | PR merge 到 master 才部署，本地 `wrangler dev` 測試 |
-| B | `wrangler.toml` 加 `[env.preview]` + CI 偵測 `pull_request` event 部署到 `zenbu-milestones-worker-preview.*.workers.dev` | PR 可實戰測試 |
+| B | `wrangler.toml` 加 `[env.preview]` + CI 偵測 `pull_request` event 部署到 `zenbu-roadmaps-worker-preview.*.workers.dev` | PR 可實戰測試 |
 | C | 每個 PR 一個 preview Worker（`-pr-${{ github.event.number }}`）| Cloudflare Free 方案 Worker 數量有限，易達上限 |
 
 **建議**：V1 A；若 bug 頻繁再升 B。
@@ -164,7 +164,7 @@ purpose: 明確列出未決項目，禁止 spec 作者腦補
 
 **建議**：A。使用者 1 小時後重整即看到正確色，短暫灰色不算問題。
 
-**影響**：若選 A，Modal 關閉後展開 milestone，會看到新 issue 的 label 短暫是灰色。
+**影響**：若選 A，Modal 關閉後展開 roadmap，會看到新 issue 的 label 短暫是灰色。
 
 ---
 

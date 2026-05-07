@@ -76,7 +76,7 @@ flowchart TD
 
     Resp201 --> CloseModal[Modal 在 500ms 內關閉]
     CloseModal --> ToastSuccess[Toast 右下角 issue #number 已建立 含連結到 htmlUrl]
-    CloseModal --> OptimisticUpdate[樂觀更新 本地 state 以 Worker 回傳資料組 IssueLite append 到對應 milestone issues]
+    CloseModal --> OptimisticUpdate[樂觀更新 本地 state 以 Worker 回傳資料組 IssueLite append 到對應 roadmap issues]
     OptimisticUpdate --> RenderList[RoadmapPage 立即顯示新 issue]
 
     RenderList -.->|下一次 cron ≤ 1 小時| CronNote[CI 重跑 fetcher 新 issue 進入 public/data/*.json]

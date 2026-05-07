@@ -11,7 +11,7 @@ import {
 import type { RepoSummary } from 'shared';
 
 type TCompletionBarChartProps = {
-  /** 只傳入有 milestone 的 repo */
+  /** 只傳入有 roadmap 的 repo */
   repos: RepoSummary[];
 };
 

@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
-import type { Milestone } from 'shared';
-import { deriveMilestoneStatus } from '../utils/progress';
-import MilestoneNode from './MilestoneNode';
+import type { Roadmap } from 'shared';
+import { deriveRoadmapStatus } from '../utils/progress';
+import RoadmapNode from './RoadmapNode';
 
-type TMilestoneTimelineProps = {
-  milestones: Milestone[];
+type TRoadmapTimelineProps = {
+  roadmaps: Roadmap[];
 };
 
 /**
  * 排序：有 dueOn 的依 dueOn 升序；沒有 dueOn 的放最後，依 createdAt 降序
  */
-const sortMilestones = (list: Milestone[]): Milestone[] =>
+const sortRoadmaps = (list: Roadmap[]): Roadmap[] =>
   list.slice().sort((a, b) => {
     if (a.dueOn && b.dueOn) return a.dueOn.localeCompare(b.dueOn);
     if (a.dueOn && !b.dueOn) return -1;
@@ -19,27 +19,27 @@ const sortMilestones = (list: Milestone[]): Milestone[] =>
   });
 
 /**
- * 推導預設展開的 milestone number
+ * 推導預設展開的 roadmap number
  * 優先序：最近一個 in_progress > 第一個 overdue > 第一個
  */
-const pickDefaultExpanded = (sorted: Milestone[]): number | null => {
+const pickDefaultExpanded = (sorted: Roadmap[]): number | null => {
   if (sorted.length === 0) return null;
 
-  const inProgress = sorted.find((m) => deriveMilestoneStatus(m) === 'in_progress');
+  const inProgress = sorted.find((m) => deriveRoadmapStatus(m) === 'in_progress');
   if (inProgress) return inProgress.number;
 
-  const overdue = sorted.find((m) => deriveMilestoneStatus(m) === 'overdue');
+  const overdue = sorted.find((m) => deriveRoadmapStatus(m) === 'overdue');
   if (overdue) return overdue.number;
 
   return sorted[0].number;
 };
 
 /**
- * Milestone 垂直時間軸
- * 左側貫穿一條垂直線，節點按 dueOn 升序排列，預設展開下一個進行中的 milestone
+ * Roadmap 垂直時間軸
+ * 左側貫穿一條垂直線，節點按 dueOn 升序排列，預設展開下一個進行中的 roadmap
  */
-const MilestoneTimeline = ({ milestones }: TMilestoneTimelineProps) => {
-  const sorted = useMemo(() => sortMilestones(milestones), [milestones]);
+const RoadmapTimeline = ({ roadmaps }: TRoadmapTimelineProps) => {
+  const sorted = useMemo(() => sortRoadmaps(roadmaps), [roadmaps]);
 
   const [expandedSet, setExpandedSet] = useState<Set<number>>(() => {
     const initial = pickDefaultExpanded(sorted);
@@ -68,9 +68,9 @@ const MilestoneTimeline = ({ milestones }: TMilestoneTimelineProps) => {
       <div className="absolute bottom-0 left-4 top-0 w-px bg-[--color-border]" aria-hidden="true" />
       <div className="flex flex-col">
         {sorted.map((m) => (
-          <MilestoneNode
+          <RoadmapNode
             key={m.number}
-            milestone={m}
+            roadmap={m}
             expanded={expandedSet.has(m.number)}
             onToggle={() => toggle(m.number)}
           />
@@ -80,4 +80,4 @@ const MilestoneTimeline = ({ milestones }: TMilestoneTimelineProps) => {
   );
 };
 
-export default MilestoneTimeline;
+export default RoadmapTimeline;

@@ -65,17 +65,17 @@ export interface RepoSummary {
   isPrivate: boolean;
   description: string | null;
   language: string | null;
-  milestoneCount: number;
-  closedMilestoneCount: number;
+  roadmapCount: number;
+  closedRoadmapCount: number;
   openIssues: number;
   closedIssues: number;
   overdueCount: number;
   completionRate: number;  // [0, 1]
-  nextDueMilestone: NextDueMilestone | null;
+  nextDueRoadmap: NextDueRoadmap | null;
 
   /**
-   * 該 repo 是否接受訪客透過 Zenbu Milestones 儀表板提交 issue / 留言。
-   * V1 規則：!isPrivate && milestoneCount > 0
+   * 該 repo 是否接受訪客透過 Zenbu Roadmaps 儀表板提交 issue / 留言。
+   * V1 規則：!isPrivate && roadmapCount > 0
    * false：OverviewPage 顯示在「僅供瀏覽」折疊區塊；RoadmapPage 隱藏「建立 issue」按鈕；
    *        Worker 拒絕對此 repo 的寫入請求。
    */
@@ -85,7 +85,7 @@ export interface RepoSummary {
 
 **欄位語意**：
 - **型別**：`boolean`（**不是 nullable**），fetcher 保證每個 repo 都有此欄位
-- **計算方式**：`!repo.isPrivate && milestones.length > 0`
+- **計算方式**：`!repo.isPrivate && roadmaps.length > 0`
 - **前端 fallback**：若 summary.json 意外缺此欄位（例如部署時序問題），前端以嚴格比對 `=== true` 作為 guard，缺失時視為 false（NFR-013）
 
 ---
@@ -117,14 +117,14 @@ function toIssueLite(issue: GitHubIssueResponse): IssueLite {
 
 ```ts
 // scripts/fetch-data.ts（節錄）
-function toRepoSummary(repo: GitHubRepo, milestones: Milestone[], ...): RepoSummary {
-  const milestoneCount = milestones.length;
+function toRepoSummary(repo: GitHubRepo, roadmaps: Roadmap[], ...): RepoSummary {
+  const roadmapCount = roadmaps.length;
   return {
     name: repo.name,
     htmlUrl: repo.html_url,
     isPrivate: repo.private,
     // ...其他欄位照舊...
-    canSubmitIssue: !repo.private && milestoneCount > 0,   // ★ 新
+    canSubmitIssue: !repo.private && roadmapCount > 0,   // ★ 新
   };
 }
 ```
@@ -163,7 +163,7 @@ await fs.writeFile('public/data/issue-types.json', JSON.stringify(issueTypes, nu
 
 ### 2.4 排序與寫檔不變
 
-`Summary.repos` 排序（`hasMilestones desc, name asc`）、`public/data/repos/{name}.json` 僅在 `milestoneCount > 0` 產出等規則**維持不變**。
+`Summary.repos` 排序（`hasRoadmaps desc, name asc`）、`public/data/repos/{name}.json` 僅在 `roadmapCount > 0` 產出等規則**維持不變**。
 
 ---
 
@@ -424,4 +424,4 @@ interface CreateCommentData {
 - 特別注意既有規範：
   - **4. `IssueLite.labels` 的 `name` 保證非空**：樂觀更新組 `IssueLite` 時，從 Worker response 的 labels 陣列（都是字串）組出 IssueLabel 物件，`name` 直接 assign（非空）、`color` 預設 `'888888'`
   - **5. `labels[].color` 格式是 6 位 hex**：`'888888'` 合規
-  - **6. `Summary.repos` 排序是契約一部分**：V1 新增的 canSubmitIssue 不影響排序規則，排序仍依 `hasMilestones desc, name asc`
+  - **6. `Summary.repos` 排序是契約一部分**：V1 新增的 canSubmitIssue 不影響排序規則，排序仍依 `hasRoadmaps desc, name asc`

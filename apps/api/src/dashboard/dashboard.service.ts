@@ -2,8 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   IssueLite,
-  Milestone,
-  MilestoneIssuesPage,
+  Roadmap,
+  RoadmapIssuesPage,
   RepoDetail,
   RepoSummary,
   Summary,
@@ -12,14 +12,14 @@ import type {
 import {
   GitHubService,
   type OctokitIssue,
-  type OctokitMilestone,
+  type OctokitRoadmap,
   type OctokitRepoFromListOrg,
 } from '../github/github.service';
 import { DashboardCacheService } from './dashboard-cache.service';
 
 /**
  * 敏感 issue 標籤：含任一標籤的 issue 會被排除在 IssueLite 之外。
- * 注意：milestone 的 openIssues / closedIssues 仍保留 GitHub 的原始數字，
+ * 注意：roadmap 的 openIssues / closedIssues 仍保留 GitHub 的原始數字，
  *       不因此過濾而減少（與 fetch-data.ts 一致，保持進度百分比與 GitHub UI 等價）。
  */
 const SENSITIVE_LABELS = new Set(['confidential', 'security', 'internal-only']);
@@ -33,14 +33,14 @@ export const CacheKeys = {
   summary: (): string => `dashboard:summary`,
   repoDetail: (owner: string, name: string): string =>
     `dashboard:repo:${owner}/${name}`,
-  milestoneIssues: (
+  roadmapIssues: (
     owner: string,
     name: string,
     number: number,
     page: number,
     perPage: number,
   ): string =>
-    `dashboard:milestone-issues:${owner}/${name}/${number}:p${page}:s${perPage}`,
+    `dashboard:roadmap-issues:${owner}/${name}/${number}:p${page}:s${perPage}`,
 } as const;
 
 /**
@@ -69,7 +69,7 @@ function createLimiter(max: number): <T>(fn: () => Promise<T>) => Promise<T> {
   };
 }
 
-/** Milestone completion：空 milestone 回 0（與 fetcher 契約一致，**禁止改為 null**）。 */
+/** Roadmap completion：空 roadmap 回 0（與 fetcher 契約一致，**禁止改為 null**）。 */
 function computeCompletion(open: number, closed: number): number {
   const total = open + closed;
   if (total === 0) return 0;
@@ -127,13 +127,13 @@ function toIssueLite(issues: OctokitIssue[]): IssueLite[] {
  * Phase 2 runtime API 的商業邏輯。取代舊 build-time fetcher 的後端等價實作：
  *   - getSummary()                   → GET /api/summary
  *   - getRepoDetail(owner, name)     → GET /api/repos/:owner/:name/detail
- *   - getMilestoneIssues(...)         → GET /api/repos/:owner/:name/milestones/:number/issues
+ *   - getRoadmapIssues(...)         → GET /api/repos/:owner/:name/roadmaps/:number/issues
  *
  * 設計：
  *   1. 所有對 GitHub 的呼叫都透過 `GitHubService`；不直接觸 Octokit。
- *   2. 回傳值的 shape 嚴格對齊 `shared/*`（Summary / RepoDetail / MilestoneIssuesPage）。
+ *   2. 回傳值的 shape 嚴格對齊 `shared/*`（Summary / RepoDetail / RoadmapIssuesPage）。
  *   3. 每個 endpoint 獨立 cache key（TTL 5 分鐘）；refresh-data 走 prefix 清除。
- *   4. 並發控制：listReposForOrg + 每個 repo 的 milestones/issues 抓取各自用獨立 limiter，
+ *   4. 並發控制：listReposForOrg + 每個 repo 的 roadmaps/issues 抓取各自用獨立 limiter，
  *      避免巢狀 await 互鎖（與 fetch-data.ts 的 repoLimit / issueLimit 設計一致）。
  */
 @Injectable()
@@ -166,21 +166,21 @@ export class DashboardService {
     );
   }
 
-  /** GET /api/repos/:owner/:name/milestones/:number/issues （分頁）。 */
-  async getMilestoneIssues(
+  /** GET /api/repos/:owner/:name/roadmaps/:number/issues （分頁）。 */
+  async getRoadmapIssues(
     owner: string,
     name: string,
-    milestoneNumber: number,
+    roadmapNumber: number,
     page: number,
     perPage: number,
-  ): Promise<MilestoneIssuesPage> {
+  ): Promise<RoadmapIssuesPage> {
     return this.cache.getOrLoad(
-      CacheKeys.milestoneIssues(owner, name, milestoneNumber, page, perPage),
+      CacheKeys.roadmapIssues(owner, name, roadmapNumber, page, perPage),
       async () => {
-        const raw = await this.github.listMilestoneIssues(
+        const raw = await this.github.listRoadmapIssues(
           owner,
           name,
-          milestoneNumber,
+          roadmapNumber,
         );
         const items = toIssueLite(raw);
         const total = items.length;
@@ -202,8 +202,8 @@ export class DashboardService {
   // ------------------------------------------------------------------
 
   /**
-   * 掃全 org 的 repo，對每個 repo 抓 milestones + issues，組合成 Summary。
-   * 排序契約：有 milestone 的 repo 在前，同類內 `name.localeCompare()` 字母序。
+   * 掃全 org 的 repo，對每個 repo 抓 roadmaps + issues，組合成 Summary。
+   * 排序契約：有 roadmap 的 repo 在前，同類內 `name.localeCompare()` 字母序。
    */
   private async buildSummary(): Promise<Summary> {
     const repos = await this.listActiveRepos();
@@ -226,26 +226,26 @@ export class DashboardService {
 
     const allRepoSummaries = results.map((r) => r.summary);
     allRepoSummaries.sort((a, b) => {
-      const aActive = a.milestoneCount > 0 ? 0 : 1;
-      const bActive = b.milestoneCount > 0 ? 0 : 1;
+      const aActive = a.roadmapCount > 0 ? 0 : 1;
+      const bActive = b.roadmapCount > 0 ? 0 : 1;
       if (aActive !== bActive) return aActive - bActive;
       return a.name.localeCompare(b.name);
     });
 
-    const activeRepos = allRepoSummaries.filter((r) => r.milestoneCount > 0);
+    const activeRepos = allRepoSummaries.filter((r) => r.roadmapCount > 0);
     const totals: Totals = {
       repos: activeRepos.length,
       allRepos: allRepoSummaries.length,
-      milestones: allRepoSummaries.reduce((s, r) => s + r.milestoneCount, 0),
-      openMilestones: allRepoSummaries.reduce(
-        (s, r) => s + r.openMilestoneCount,
+      roadmaps: allRepoSummaries.reduce((s, r) => s + r.roadmapCount, 0),
+      openRoadmaps: allRepoSummaries.reduce(
+        (s, r) => s + r.openRoadmapCount,
         0,
       ),
-      closedMilestones: allRepoSummaries.reduce(
-        (s, r) => s + r.closedMilestoneCount,
+      closedRoadmaps: allRepoSummaries.reduce(
+        (s, r) => s + r.closedRoadmapCount,
         0,
       ),
-      overdueMilestones: allRepoSummaries.reduce(
+      overdueRoadmaps: allRepoSummaries.reduce(
         (s, r) => s + r.overdueCount,
         0,
       ),
@@ -299,7 +299,7 @@ export class DashboardService {
 
   /**
    * 為單一 repo 建構 RepoDetail + RepoSummary（兩者共享一次 fetch）。
-   * 以 ISSUE_CONCURRENCY 為限抓各 milestone 的 issues 與全 repo issues。
+   * 以 ISSUE_CONCURRENCY 為限抓各 roadmap 的 issues 與全 repo issues。
    */
   private async buildRepoBundle(
     repoMeta: OctokitRepoFromListOrg,
@@ -307,15 +307,15 @@ export class DashboardService {
     const { name } = repoMeta;
     const issueLimit = createLimiter(ISSUE_CONCURRENCY);
 
-    const [milestones, allIssuesRaw] = await Promise.all([
-      this.github.listRepoMilestones(this.org, name),
+    const [roadmaps, allIssuesRaw] = await Promise.all([
+      this.github.listRepoRoadmaps(this.org, name),
       issueLimit(() => this.github.listAllRepoIssues(this.org, name)),
     ]);
 
-    const milestonesWithIssues: Milestone[] = await Promise.all(
-      milestones.map((m: OctokitMilestone) =>
+    const roadmapsWithIssues: Roadmap[] = await Promise.all(
+      roadmaps.map((m: OctokitRoadmap) =>
         issueLimit(async () => {
-          const raw = await this.github.listMilestoneIssues(
+          const raw = await this.github.listRoadmapIssues(
             this.org,
             name,
             m.number,
@@ -347,23 +347,23 @@ export class DashboardService {
       isPrivate: repoMeta.private,
       language: repoMeta.language ?? null,
       updatedAt: repoMeta.updated_at ?? new Date().toISOString(),
-      milestones: milestonesWithIssues,
+      roadmaps: roadmapsWithIssues,
       allIssues: toIssueLite(allIssuesRaw),
     };
 
-    const openMs = milestonesWithIssues.filter((m) => m.state === 'open');
-    const closedMs = milestonesWithIssues.filter((m) => m.state === 'closed');
+    const openMs = roadmapsWithIssues.filter((m) => m.state === 'open');
+    const closedMs = roadmapsWithIssues.filter((m) => m.state === 'closed');
     const overdueMs = openMs.filter((m) => isOverdue(m.dueOn, m.state));
-    const openIssues = milestonesWithIssues.reduce(
+    const openIssues = roadmapsWithIssues.reduce(
       (s, m) => s + m.openIssues,
       0,
     );
-    const closedIssues = milestonesWithIssues.reduce(
+    const closedIssues = roadmapsWithIssues.reduce(
       (s, m) => s + m.closedIssues,
       0,
     );
     const nextDue = openMs
-      .filter((m): m is Milestone & { dueOn: string } => !!m.dueOn)
+      .filter((m): m is Roadmap & { dueOn: string } => !!m.dueOn)
       .sort(
         (a, b) => new Date(a.dueOn).getTime() - new Date(b.dueOn).getTime(),
       )[0];
@@ -375,14 +375,14 @@ export class DashboardService {
       isPrivate: repoMeta.private,
       language: repoMeta.language ?? null,
       updatedAt: repoMeta.updated_at ?? new Date().toISOString(),
-      milestoneCount: milestonesWithIssues.length,
-      openMilestoneCount: openMs.length,
-      closedMilestoneCount: closedMs.length,
+      roadmapCount: roadmapsWithIssues.length,
+      openRoadmapCount: openMs.length,
+      closedRoadmapCount: closedMs.length,
       overdueCount: overdueMs.length,
       completionRate: computeCompletion(openIssues, closedIssues),
       openIssues,
       closedIssues,
-      nextDueMilestone: nextDue
+      nextDueRoadmap: nextDue
         ? {
             number: nextDue.number,
             title: nextDue.title,

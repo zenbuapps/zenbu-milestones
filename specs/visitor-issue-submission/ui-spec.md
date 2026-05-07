@@ -307,7 +307,7 @@ const browseOnlyRepos  = repos.filter(r => r.canSubmitIssue !== true);
 
 ### 8.4 「僅供瀏覽」折疊
 
-沿用既有 `Sidebar` 的「其他 repos（無 milestone）」折疊風格保持一致性。
+沿用既有 `Sidebar` 的「其他 repos（無 roadmap）」折疊風格保持一致性。
 
 ---
 

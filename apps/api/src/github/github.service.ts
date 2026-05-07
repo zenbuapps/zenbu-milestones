@@ -6,13 +6,13 @@ import { RateLimitedError, UpstreamAuthError, UpstreamError } from './github.err
 
 /**
  * 代轉 issue 時加上的來源 label。
- * 用於 GitHub 端追蹤「此 issue 來自 zenbu-milestones 網站審核通過」，
+ * 用於 GitHub 端追蹤「此 issue 來自 zenbu-roadmaps 網站審核通過」，
  * 方便統計與調查。label 若不存在會先自動建立；若建立 label 失敗
  * 不影響 issue 本體，僅記錄 warning。
  */
-const SOURCE_LABEL_NAME = 'via-zenbu-milestones';
+const SOURCE_LABEL_NAME = 'via-zenbu-roadmaps';
 const SOURCE_LABEL_COLOR = '0e8a16'; // 綠色（GitHub 慣例）
-const SOURCE_LABEL_DESC = 'Issue submitted via zenbu-milestones portal';
+const SOURCE_LABEL_DESC = 'Issue submitted via zenbu-roadmaps portal';
 
 export interface CreateIssueParams {
   owner: string;
@@ -32,7 +32,7 @@ export interface CreateIssueResult {
  */
 export type OctokitRepoFromListOrg =
   RestEndpointMethodTypes['repos']['listForOrg']['response']['data'][number];
-export type OctokitMilestone =
+export type OctokitRoadmap =
   RestEndpointMethodTypes['issues']['listMilestones']['response']['data'][number];
 export type OctokitIssue =
   RestEndpointMethodTypes['issues']['listForRepo']['response']['data'][number];
@@ -49,7 +49,7 @@ export interface RateLimitInfo {
  * GitHubService
  * ---------------------------------------------------------------
  * 封裝 @octokit/rest，使用 ZENBU_ORG_WRITE_TOKEN 代為呼叫 GitHub
- * REST API（目前只實作 createIssue，未來可擴充 label / milestone 等）。
+ * REST API（目前只實作 createIssue，未來可擴充 label / roadmap 等）。
  *
  * 錯誤處理契約：
  *   - 401 / 403 (非 rate limit) → UpstreamAuthError
@@ -74,7 +74,7 @@ export class GitHubService implements OnModuleInit {
     }
     this.octokit = new Octokit({
       auth: token,
-      userAgent: 'zenbu-milestones-api',
+      userAgent: 'zenbu-roadmaps-api',
     });
   }
 
@@ -185,12 +185,13 @@ export class GitHubService implements OnModuleInit {
   }
 
   /**
-   * 列出指定 repo 的所有 milestones（含 open / closed）。
+   * 列出指定 repo 的所有 roadmaps（含 open / closed）。
+   * 註：底層仍使用 GitHub `listMilestones` API（GitHub 官方術語為 milestone）。
    */
-  async listRepoMilestones(
+  async listRepoRoadmaps(
     owner: string,
     repo: string,
-  ): Promise<OctokitMilestone[]> {
+  ): Promise<OctokitRoadmap[]> {
     try {
       return await this.octokit.paginate(this.octokit.issues.listMilestones, {
         owner,
@@ -204,19 +205,20 @@ export class GitHubService implements OnModuleInit {
   }
 
   /**
-   * 列出某個 milestone 底下的所有 issue。
+   * 列出某個 roadmap 底下的所有 issue。
    * 不過濾 PR / sensitive label —— 由 caller 決定。
+   * 註：GitHub API 的 query parameter 名稱仍叫 `milestone`，不可改。
    */
-  async listMilestoneIssues(
+  async listRoadmapIssues(
     owner: string,
     repo: string,
-    milestoneNumber: number,
+    roadmapNumber: number,
   ): Promise<OctokitIssue[]> {
     try {
       return await this.octokit.paginate(this.octokit.issues.listForRepo, {
         owner,
         repo,
-        milestone: String(milestoneNumber),
+        milestone: String(roadmapNumber),
         state: 'all',
         per_page: 100,
       });
@@ -226,7 +228,7 @@ export class GitHubService implements OnModuleInit {
   }
 
   /**
-   * 列出 repo 所有 open + closed issues（不限 milestone），依 updatedAt desc。
+   * 列出 repo 所有 open + closed issues（不限 roadmap），依 updatedAt desc。
    * 同樣不過濾 PR / sensitive label。
    */
   async listAllRepoIssues(owner: string, repo: string): Promise<OctokitIssue[]> {

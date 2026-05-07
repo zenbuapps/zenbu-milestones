@@ -1,11 +1,11 @@
 ---
-name: zenbu-milestones-dashboard
-description: Zenbu Milestones 專案特定架構與工作慣例索引。當任務涉及此專案的 pnpm monorepo 結構（apps/web + apps/api + packages/shared）、React SPA 前端、NestJS + Prisma 後端、後端 DashboardModule（runtime 抓 GitHub + TTL cache）、訪客投稿 issue 流程、admin 審核、在 Overview 或 Roadmap 頁新增元件、調整 StatCard / Sidebar / 時間軸時載入。包含資料契約規則、Tailwind 3 + CSS 變數設計系統規範、pnpm workspace 規範的入口索引。本 skill 採索引式架構：請依任務類型讀取對應的 `.claude/rules/*.rule.md`。
+name: zenbu-roadmaps-dashboard
+description: Zenbu Roadmaps 專案特定架構與工作慣例索引。當任務涉及此專案的 pnpm monorepo 結構（apps/web + apps/api + packages/shared）、React SPA 前端、NestJS + Prisma 後端、後端 DashboardModule（runtime 抓 GitHub + TTL cache）、訪客投稿 issue 流程、admin 審核、在 Overview 或 Roadmap 頁新增元件、調整 StatCard / Sidebar / 時間軸時載入。包含資料契約規則、Tailwind 3 + CSS 變數設計系統規範、pnpm workspace 規範的入口索引。本 skill 採索引式架構：請依任務類型讀取對應的 `.claude/rules/*.rule.md`。
 ---
 
-# Zenbu Milestones Dashboard
+# Zenbu Roadmaps Dashboard
 
-本專案為 **pnpm monorepo**，前端為 React SPA，後端為 NestJS + Prisma + PostgreSQL，用途是視覺化呈現 GitHub `zenbuapps` 組織旗下所有 repo 的 milestone / issue 進度，並提供訪客投稿 issue → admin 審核 → 轉送至 GitHub 的工作流程。
+本專案為 **pnpm monorepo**，前端為 React SPA，後端為 NestJS + Prisma + PostgreSQL，用途是視覺化呈現 GitHub `zenbuapps` 組織旗下所有 repo 的 roadmap / issue 進度，並提供訪客投稿 issue → admin 審核 → 轉送至 GitHub 的工作流程。
 
 ---
 
@@ -14,7 +14,7 @@ description: Zenbu Milestones 專案特定架構與工作慣例索引。當任�
 本 skill 在下列情境必須載入：
 
 - 在此 repo 中做任何程式碼修改前（新增元件、調整資料流、升級依賴、動 Prisma schema）
-- 任務提到「milestone」「roadmap」「org 資料」「issue 列表」「圖表」「Sidebar」「StatCard」「投稿」「admin 審核」
+- 任務提到「roadmap」「roadmap」「org 資料」「issue 列表」「圖表」「Sidebar」「StatCard」「投稿」「admin 審核」
 - 觸發關鍵字：`DashboardService`、`loader`、`types`、`api.ts`、`AppShell`、`OverviewPage`、`RoadmapPage`、`HashRouter`、`@prisma/client`、`DATABASE_URL`、`VITE_API_BASE_URL`、`RequireAuthGate`
 
 ---
@@ -22,7 +22,7 @@ description: Zenbu Milestones 專案特定架構與工作慣例索引。當任�
 ## Workspace 結構
 
 ```
-zenbu-milestones/
+zenbu-roadmaps/
 ├── apps/
 │   ├── web/       Vite 5 + React 18 + TypeScript + Tailwind 3
 │   └── api/       NestJS 11 + Prisma 5 + PostgreSQL + Passport Google OAuth
@@ -56,7 +56,7 @@ zenbu-milestones/
 **主要 endpoints**：
 - `GET  /api/summary` — `Summary`
 - `GET  /api/repos/:owner/:name/detail` — `RepoDetail`
-- `GET  /api/repos/:owner/:name/milestones/:number/issues` — `MilestoneIssuesPage`
+- `GET  /api/repos/:owner/:name/roadmaps/:number/issues` — `RoadmapIssuesPage`
 - `GET  /api/health/github` — `GithubHealthStatus`（公開）
 - `POST /api/admin/refresh-data` — 清 cache（admin only，10s debounce）
 
@@ -86,7 +86,7 @@ zenbu-milestones/
 | 做 UI（新元件、頁面、配色、按鈕、圖示、響應式）| `.claude/rules/styling-system.rule.md` |
 | 動依賴、`package.json`、workspace 建置順序 | `.claude/rules/pnpm-and-ci.rule.md` |
 
-**判斷原則**：只讀用得到的 rule。例如「在 OverviewPage 加一張新圖表」只需 `styling-system.rule.md`；「改 milestone 的某欄位」要 `data-contract.rule.md`；「升級 pnpm」要 `pnpm-and-ci.rule.md`。
+**判斷原則**：只讀用得到的 rule。例如「在 OverviewPage 加一張新圖表」只需 `styling-system.rule.md`；「改 roadmap 的某欄位」要 `data-contract.rule.md`；「升級 pnpm」要 `pnpm-and-ci.rule.md`。
 
 ---
 
@@ -150,13 +150,13 @@ zenbu-milestones/
 ### 「新增一個敏感 label」
 1. 改 `apps/api/src/dashboard/dashboard.service.ts` 的 `SENSITIVE_LABELS` 集合
 2. 無需改 shared 型別（已被 service 過濾，client 看不到）
-3. Milestone 的 `openIssues` / `closedIssues` 仍反映 GitHub 原始計數 —— 這是故意的（見 `data-contract.rule.md`）
+3. Roadmap 的 `openIssues` / `closedIssues` 仍反映 GitHub 原始計數 —— 這是故意的（見 `data-contract.rule.md`）
 4. Cache 可能讓舊資料殘留，重啟 api 或打 `POST /api/admin/refresh-data`
 
-### 「改 Milestone 時間軸的視覺」
+### 「改 Roadmap 時間軸的視覺」
 1. 讀 `styling-system.rule.md`（顏色 / 圖示 / class 元件規範）
-2. 動 `apps/web/src/components/MilestoneNode.tsx` 與（可能）`apps/web/src/components/StatusBadge.tsx`
-3. 不要動 `deriveMilestoneStatus` 的分類邏輯（done / in_progress / overdue / no_due）—— UI 相依
+2. 動 `apps/web/src/components/RoadmapNode.tsx` 與（可能）`apps/web/src/components/StatusBadge.tsx`
+3. 不要動 `deriveRoadmapStatus` 的分類邏輯（done / in_progress / overdue / no_due）—— UI 相依
 
 ### 「加一個新的後端 endpoint」
 1. 讀 `packages/shared` 看 DTO 有沒有相對應；若無，在 shared 新增並 `pnpm build:shared`

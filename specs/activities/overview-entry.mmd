@@ -37,7 +37,7 @@ flowchart TD
     GetCanSubmit --> HeaderCheck{canSubmitIssue === true?}
 
     HeaderCheck -- 否 --> HidePageBtn[PageHeader 不顯示建立 Issue 按鈕 僅顯示開啟 GitHub Repo 按鈕]
-    HidePageBtn --> BrowseMilestones[[訪客瀏覽 milestones 與 issues 僅讀取模式]]
+    HidePageBtn --> BrowseRoadmaps[[訪客瀏覽 roadmaps 與 issues 僅讀取模式]]
 
     HeaderCheck -- 是 --> ShowPageBtn[PageHeader 顯示建立 Issue 按鈕 btn-primary Plus 圖示 md 斷點響應式堆疊]
     ShowPageBtn --> UserClickCreate[[訪客點擊建立 Issue 按鈕]]

@@ -22,7 +22,7 @@ scope_mode: EXPANSION
 3. [架構圖與資料流](#3-架構圖與資料流)
 4. [前置作業 Checklist（必須最先完成）](#4-前置作業-checklist)
 5. [技術決策記錄（ADR）](#5-技術決策記錄adr)
-6. [Milestone 切分（M1–M6）](#6-milestone-切分m1m6)
+6. [Roadmap 切分（M1–M6）](#6-roadmap-切分m1m6)
 7. [M1 詳細實作步驟（立刻開工）](#7-m1-詳細實作步驟)
 8. [資料流分析（Shadow Paths）](#8-資料流分析)
 9. [錯誤處理登記表](#9-錯誤處理登記表)
@@ -40,7 +40,7 @@ scope_mode: EXPANSION
 
 ## 1. 概述
 
-讓任何使用者以 Google 帳號登入 `zenbu-milestones` 網站後，可對 `zenbuapps` 組織下所有公開 repo 提交 issue 草稿；草稿寫入後端 DB 待管理員審核，審核通過才由後端代呼 GitHub API 建立真實 issue。
+讓任何使用者以 Google 帳號登入 `zenbu-roadmaps` 網站後，可對 `zenbuapps` 組織下所有公開 repo 提交 issue 草稿；草稿寫入後端 DB 待管理員審核，審核通過才由後端代呼 GitHub API 建立真實 issue。
 
 本計劃把專案從 **純靜態 SPA** 翻轉為 **前後分離 + PostgreSQL 的 Monorepo 應用**，但同時**保留**既有 build-time fetcher 作為公開唯讀資料快取，降低後端 runtime 的 GitHub API 壓力。
 
@@ -56,7 +56,7 @@ V1 範圍：Google OAuth、issue 草稿 CRUD、最小管理員後台（審核 / 
 
 **成功的樣子**：
 
-- 任何 Google 使用者登入後，能在 `zenbu-milestones` UI 上選擇目標 repo、填寫 Markdown issue、送出草稿
+- 任何 Google 使用者登入後，能在 `zenbu-roadmaps` UI 上選擇目標 repo、填寫 Markdown issue、送出草稿
 - 草稿在 DB 進入 `pending` 狀態，使用者能在「我的 issue 管理」頁追蹤進度
 - 管理員審核通過後，後端自動代呼 GitHub API 建立 issue，下一輪 fetcher 跑完後該 issue 會出現在 repo 的 roadmap 頁
 - 管理員能即時切換每個 repo 的 `visibleOnUI` / `canSubmitIssue` 旗標
@@ -90,7 +90,7 @@ flowchart TB
   end
 
   %% Read path (公開，免登入)
-  User((使用者瀏覽器)) -- "GET /zenbu-milestones/" --> FE
+  User((使用者瀏覽器)) -- "GET /zenbu-roadmaps/" --> FE
   FE -- "fetch(/data/summary.json)<br/>(BASE_URL)" --> STATIC
   FETCHER -- "ZENBU_ORG_READ_TOKEN" --> GH
   FETCHER -- "write JSON" --> STATIC
@@ -121,7 +121,7 @@ flowchart TB
 
 | 路徑 | 型別 | 觸發 | 認證 | 資料來源 |
 |------|------|------|------|---------|
-| `GET /zenbu-milestones/*` | 靜態 | 瀏覽器 | 無 | GitHub Pages (dist/) |
+| `GET /zenbu-roadmaps/*` | 靜態 | 瀏覽器 | 無 | GitHub Pages (dist/) |
 | `fetch(/data/summary.json)` | 靜態 | SPA 啟動 | 無 | `public/data/` JSON |
 | `POST /api/auth/google` | API | 登入按鈕 | OAuth flow | Google + DB upsert |
 | `POST /api/issues` | API | 提交表單 | session | DB write only |
@@ -158,7 +158,7 @@ flowchart TB
     - `https://<prod-api-domain>/api/auth/google/callback`（正式）
   - 下載 `client_id` / `client_secret` → 分別填入 `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`
 - [ ] **決定後端部署網域**（影響 OAuth redirect 與前端 CORS）
-  - 候選：`api.zenbu-milestones.example.com`（自有網域）或 Railway 自動子網域
+  - 候選：`api.zenbu-roadmaps.example.com`（自有網域）或 Railway 自動子網域
   - 如果走自有網域：先在 DNS 設 CNAME，再申請 OAuth redirect URL
 - [ ] **決定 PostgreSQL 託管**
   - 候選：Railway 內建 PG、Neon、Supabase（見 5.2 ADR）
@@ -283,7 +283,7 @@ flowchart TB
 
 ---
 
-## 6. Milestone 切分（M1–M6）
+## 6. Roadmap 切分（M1–M6）
 
 ### M1 — OAuth + DB + 提交 API（首發，**詳寫於第 7 節**）
 
@@ -312,7 +312,7 @@ flowchart TB
 **驗收標準**：
 
 - [ ] `pnpm install` 在 root 目錄能裝好兩個 workspace
-- [ ] `pnpm --filter web dev` 開得起 SPA（連到 `http://localhost:5173/zenbu-milestones/`）
+- [ ] `pnpm --filter web dev` 開得起 SPA（連到 `http://localhost:5173/zenbu-roadmaps/`）
 - [ ] `pnpm --filter api start:dev` 開得起 NestJS（`http://localhost:4000/api/health` 回 200）
 - [ ] `pnpm --filter api prisma migrate dev` 能建立所有 5 張表
 - [ ] Google OAuth flow：`GET /api/auth/google` 轉跳 → callback → 寫入 `users` → 回 session cookie
@@ -337,7 +337,7 @@ flowchart TB
 - OAuth 故障 → 關閉 `VITE_API_BASE_URL` env var，前端退回純唯讀模式，既有功能完全不受影響
 - DB schema 錯誤 → 刪 Railway PG instance 重來（M1 階段 DB 內容可拋棄）
 
-**複雜度**：**高**（最大 Milestone，有 Monorepo 改造 + 新增完整後端 stack）
+**複雜度**：**高**（最大 Roadmap，有 Monorepo 改造 + 新增完整後端 stack）
 
 ### M2 — 前端表單 Modal/Drawer + Markdown 編輯器
 
@@ -451,7 +451,7 @@ flowchart TB
 
 - [ ] 非 admin 使用者訪問 `/#/admin` 被 redirect 到首頁（前端 guard）
 - [ ] 非 admin 呼叫任何 `/api/admin/*` 回 403（後端 guard）
-- [ ] 審核通過 → GitHub 上真的出現該 issue（帶 `via-zenbu-milestones` label）
+- [ ] 審核通過 → GitHub 上真的出現該 issue（帶 `via-zenbu-roadmaps` label）
 - [ ] 審核失敗（GitHub API 回 422 等）→ DB status 保持 `pending`，不轉為 `synced-to-github`，錯誤訊息顯示給 admin
 - [ ] repo 設定切換後，前端下次 `loadSummary()` 能反映（或直接 context 更新）
 - [ ] role 變更即時寫 `audit_logs` 一筆
@@ -506,16 +506,16 @@ flowchart TB
 | 類型 | 路徑 | 動作 |
 |------|------|------|
 | 新 | `apps/web/src/components/RepoIssueList.tsx` | 列表 + filter |
-| 新 | `apps/web/src/components/IssueFilterBar.tsx` | 狀態 / label / milestone / assignee / keyword |
+| 新 | `apps/web/src/components/IssueFilterBar.tsx` | 狀態 / label / roadmap / assignee / keyword |
 | 改 | `apps/web/src/pages/RoadmapPage.tsx` | 嵌入 RepoIssueList |
-| 改 | `apps/web/scripts/fetch-data.ts` | 擴充 `RepoDetail.issues` 包含所有 repo issue（不只 milestone 內的） |
+| 改 | `apps/web/scripts/fetch-data.ts` | 擴充 `RepoDetail.issues` 包含所有 repo issue（不只 roadmap 內的） |
 | 改 | `apps/web/src/data/types.ts` | `RepoDetail` 新增 `allIssues: IssueLite[]`（**三端同步！見 data-contract rule**） |
 
 **過濾能力（V1 必備）**：
 
 - 狀態：`open` / `closed` / `all`
 - Label：單選 / 多選
-- Milestone：單選
+- Roadmap：單選
 - Assignee：單選
 - 關鍵字：標題 + body 子字串匹配（client-side）
 
@@ -534,7 +534,7 @@ flowchart TB
 
 **風險**：**中**
 
-- fetcher 擴充要抓全 repo issue（不只 milestone 內），`p-limit` 要調整避免觸發 rate limit
+- fetcher 擴充要抓全 repo issue（不只 roadmap 內），`p-limit` 要調整避免觸發 rate limit
 - `types.ts` 變更 → 三端同步檢查（`fetch-data.ts`、`loader.ts`、所有消費端）依 `.claude/rules/data-contract.rule.md` 第 1 條
 
 **Rollback**：拔 `<RepoIssueList>`，其他功能不受影響
@@ -549,7 +549,7 @@ flowchart TB
 
 ### 7.1 Monorepo 初始化
 
-**前提**：在專案根目錄 `C:\Users\User\DEV\zenbu\zenbu-milestones\` 操作。既有 `src/`、`public/`、`scripts/`、`vite.config.ts` 等檔案將移入 `apps/web/`。
+**前提**：在專案根目錄 `C:\Users\User\DEV\zenbu\zenbu-roadmaps\` 操作。既有 `src/`、`public/`、`scripts/`、`vite.config.ts` 等檔案將移入 `apps/web/`。
 
 #### 步驟 7.1.1 — 建立 workspace 設定
 
@@ -585,7 +585,7 @@ git mv tsconfig.node.json apps/web/tsconfig.node.json
 
 ```json
 {
-  "name": "zenbu-milestones-monorepo",
+  "name": "zenbu-roadmaps-monorepo",
   "private": true,
   "packageManager": "pnpm@10.32.1",
   "scripts": {
@@ -1265,7 +1265,7 @@ export class MeController {
 
 ```env
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/zenbu_milestones
+DATABASE_URL=postgresql://user:pass@localhost:5432/zenbu_roadmaps
 
 # Google OAuth (see Google Cloud Console)
 GOOGLE_OAUTH_CLIENT_ID=
@@ -1310,7 +1310,7 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
-  base: '/zenbu-milestones/',
+  base: '/zenbu-roadmaps/',
   build: { outDir: 'dist', sourcemap: false },
   server: { port: 5173 },
 });
@@ -1408,7 +1408,7 @@ pnpm start:dev
 # 3. 前端
 cd ../..
 pnpm --filter web dev
-# ✓ http://localhost:5173/zenbu-milestones/ 仍能正常顯示
+# ✓ http://localhost:5173/zenbu-roadmaps/ 仍能正常顯示
 
 # 4. OAuth flow
 # 瀏覽器訪問 http://localhost:4000/api/auth/google
@@ -1683,7 +1683,7 @@ await prisma.repoSettings.upsert({
 | 4-5-1 | V1 審核介面完整度 | **B：最小 admin 頁**（三分頁）|
 | 4-6-1 | archived / private repo 預設 | archived `visibleOnUI=false` 預設；private 不納入 DB |
 | 4-6-2 | 新 repo 首次 `repo_settings` 初始化 | fetcher 每輪 upsert（insert only，**不覆蓋** admin 設定；但 archived 狀態會主動同步 `visibleOnUI`）|
-| 5-1 | 轉送時加來源 label `via-zenbu-milestones` | **加**（M4 實作時，若該 label 不存在先自動 `POST /repos/.../labels` 建立一次） |
+| 5-1 | 轉送時加來源 label `via-zenbu-roadmaps` | **加**（M4 實作時，若該 label 不存在先自動 `POST /repos/.../labels` 建立一次） |
 | 6-1 | DB 技術棧 | **PostgreSQL** |
 | 6-2 | 專案結構 | **Monorepo（pnpm workspaces）**，`apps/web` + `apps/api` + `packages/shared` |
 | 6-3 | 後端部署位置 | **Railway**（ADR-002）|
@@ -1738,7 +1738,7 @@ flowchart LR
 
 - 既有專案無測試（`CLAUDE.md` 明示「沒有測試框架」）
 - V1 目標是快速驗證架構翻轉可行性，引入 Vitest / Jest / Playwright 會把 Monorepo 初始化工作量翻倍
-- 手動 QA 覆蓋 happy path；前置作業 checklist 完成後，M1–M4 每個 Milestone 都有明確的 curl / 瀏覽器驗證步驟
+- 手動 QA 覆蓋 happy path；前置作業 checklist 完成後，M1–M4 每個 Roadmap 都有明確的 curl / 瀏覽器驗證步驟
 
 **替代方案**：
 
@@ -1765,7 +1765,7 @@ flowchart LR
 - [ ] `canSubmitIssue=false` 的 repo，API 回 403
 - [ ] OAuth callback 時若 Google 拒絕（使用者按取消），回首頁無 500
 - [ ] 使用者 A 提交的 issue，使用者 B 看不到（`GET /api/me/issues` 隔離）
-- [ ] Admin 審核通過 → GitHub 上確實看到 issue + `via-zenbu-milestones` label
+- [ ] Admin 審核通過 → GitHub 上確實看到 issue + `via-zenbu-roadmaps` label
 - [ ] 同一 issue 被兩個 admin 同時點「通過」→ 第二位回 409
 - [ ] 最後一位 admin 撤銷自己 → 回 409
 - [ ] fetcher 跑完後，`repo_settings` 表出現新 repo 紀錄
@@ -1854,7 +1854,7 @@ M6 為 `RepoDetail` 新增 `allIssues: IssueLite[]` 時，必須同步：
 ### M4 DoD
 
 - [ ] `/#/admin` 三分頁 UI 可操作
-- [ ] 審核通過 → GitHub 上真的出現 issue + `via-zenbu-milestones` label
+- [ ] 審核通過 → GitHub 上真的出現 issue + `via-zenbu-roadmaps` label
 - [ ] DB 狀態同步為 `synced-to-github`，`githubIssueNumber` 有值
 - [ ] repo 設定 toggle 即時生效
 - [ ] 使用者權限變更即時寫 `audit_logs`
@@ -1905,9 +1905,9 @@ V1 **不做**：
 
 **整體專案**：**高**（架構翻轉 + 新增完整後端 stack + 部署平台接入）
 
-**各 Milestone**：
+**各 Roadmap**：
 
-| Milestone | 複雜度 | 預估工作量（人/天，熟練全端工程師）|
+| Roadmap | 複雜度 | 預估工作量（人/天，熟練全端工程師）|
 |-----------|--------|-------------------------------|
 | 前置作業 | 低 | 0.5 天（但需人親自執行，不能自動化）|
 | **M1** | **高** | **5-7 天** |
@@ -1970,7 +1970,7 @@ V1 **不做**：
 - ✅ 步驟 6「建立計劃」— §6–§7
 - ✅ ASCII 資料流圖（§8 共 4 張）、Mermaid 架構圖（§3）、dependency graph（§13）皆齊
 - ✅ 錯誤處理登記表、失敗模式登記表、風險登記表皆齊
-- ✅ 每個 Milestone 有明確檔案變更表 + DoD
+- ✅ 每個 Roadmap 有明確檔案變更表 + DoD
 - ✅ 成功標準可勾選
 - ✅ 限制條件明確
 - ✅ 範圍模式標記為 EXPANSION（greenfield feature），未無聲擴大

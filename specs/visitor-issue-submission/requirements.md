@@ -23,7 +23,7 @@ scope: V1
 
 ### FR-002 — 訪客可對現有 issue 留言
 
-**描述**：RoadmapPage 的 `MilestoneNode` 展開後顯示 `IssueList`，每個 issue 項目應有「留言」按鈕；點擊後開啟留言 Modal，填入 `body` 後送出，Modal 顯示成功訊息並自動關閉。
+**描述**：RoadmapPage 的 `RoadmapNode` 展開後顯示 `IssueList`，每個 issue 項目應有「留言」按鈕；點擊後開啟留言 Modal，填入 `body` 後送出，Modal 顯示成功訊息並自動關閉。
 
 **對應決策**：Q6、Q11（留言混合方案）、Q13
 
@@ -111,7 +111,7 @@ scope: V1
 V1 規則（於 `scripts/fetch-data.ts::buildRepoSummary` 計算）：
 
 ```
-canSubmitIssue = !repo.isPrivate && milestones.length > 0
+canSubmitIssue = !repo.isPrivate && roadmaps.length > 0
 ```
 
 **對應決策**：Q19
@@ -123,7 +123,7 @@ canSubmitIssue = !repo.isPrivate && milestones.length > 0
 **描述**：OverviewPage 的 RepoCard 列表拆為兩區塊：
 
 1. **「接受訪客提交」**：`canSubmitIssue === true` 的 repo，顯示為完整 RepoCard grid（沿用現有樣式，額外在 RepoCard 內加入「在此建立 issue」提示 / CTA）
-2. **「僅供瀏覽」**（折疊，預設收合）：`canSubmitIssue === false` 的 repo，延用現有「其他 repos（無 milestone）」的折疊樣式，點擊外連到 GitHub，**不顯示建立 issue 入口**
+2. **「僅供瀏覽」**（折疊，預設收合）：`canSubmitIssue === false` 的 repo，延用現有「其他 repos（無 roadmap）」的折疊樣式，點擊外連到 GitHub，**不顯示建立 issue 入口**
 
 **對應決策**：Q19
 
@@ -141,7 +141,7 @@ canSubmitIssue = !repo.isPrivate && milestones.length > 0
 
 **描述**：寫入成功後：
 
-- **建立 issue**：Modal 關閉 → Toast 通知「issue 已建立」+ 連結到新 issue 的 GitHub URL → 前端在本地 state 中 append 新 issue 到對應 milestone 的 issues 陣列（使用 Worker 回傳的 `number` / `html_url` / `title` 等欄位，type / labels 以前端表單值為準）
+- **建立 issue**：Modal 關閉 → Toast 通知「issue 已建立」+ 連結到新 issue 的 GitHub URL → 前端在本地 state 中 append 新 issue 到對應 roadmap 的 issues 陣列（使用 Worker 回傳的 `number` / `html_url` / `title` 等欄位，type / labels 以前端表單值為準）
 - **留言**：Modal 關閉 → Toast 通知「留言已送出」→ 前端不更新本地 state（`IssueLite` 不含 comments 欄位，無處可更）
 
 下一小時 fetcher 重跑後，`public/data/*.json` 會同步真實狀態，瀏覽器 refresh 即覆蓋樂觀更新。
