@@ -131,7 +131,7 @@ jobs:
 
       - name: Create GHCR pull secret
         run: |
-          GHCR_SECRET=$(echo -n '{"auths":{"ghcr.io":{"auth":"'$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64)'"}}}' | base64)
+          GHCR_SECRET=$(echo -n '{"auths":{"ghcr.io":{"auth":"'$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64 -w0)'"}}}' | base64 -w0)
           echo "GHCR_SECRET=$GHCR_SECRET" >> "$GITHUB_ENV"
 
       - name: Deploy with Helm
