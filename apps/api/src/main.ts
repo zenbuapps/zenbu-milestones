@@ -60,50 +60,39 @@ async function bootstrap(): Promise<void> {
   const explicitSecure = hasExplicitSecure && forceSecureRaw.toLowerCase() === 'true';
   const cookieSecure = hasExplicitSecure ? explicitSecure : isProduction || hasHttpsOrigin;
   const cookieSameSite: 'lax' | 'none' = cookieSecure ? 'none' : 'lax';
-  const needsCrossSite = cookieSecure;
 
   // --------------------------------------------------------------
   // Trust proxy
   //   設 true 讓 express 信任 X-Forwarded-* headers（影響 req.ip / req.protocol 等）。
   //   express-session 的 issecure() 在 trust proxy=true 時走 XFP 判斷分支，
-  //   配合下方 forceXfpHttps middleware（改寫 XFP=https on host match）才能讓
+  //   配合下方 forceXfpHttps middleware（production 無條件注入 XFP=https）才能讓
   //   secure cookie 正確寫入——光靠這條 trust proxy 不夠，因為 K8s Envoy Gateway
   //   實測不送 / 被剝除 XFP，必須由 app 端自己注入。
   // --------------------------------------------------------------
-  app.set('trust proxy', true);
+  const trustProxy = true;
+  app.set('trust proxy', trustProxy);
 
   // --------------------------------------------------------------
-  // Force X-Forwarded-Proto based on APP_BASE_URL host
+  // Force X-Forwarded-Proto = https（僅 production）
   //   問題：cookie.secure=true 時 express-session 內部用 `issecure()` 檢查，
   //         會讀 req.headers['x-forwarded-proto']（trust proxy=true 時走此路徑）
   //         與 req.connection.encrypted。K8s Envoy Gateway 終止 TLS 後 POD 看到
-  //         plain HTTP，且 X-Forwarded-Proto 不可靠（可能未送或被剝），
+  //         plain HTTP，且本叢集的 Envoy Gateway 不轉發 X-Forwarded-Proto，
   //         導致 issecure() 回 false → Set-Cookie 被 silently drop。
-  //   解法：本專案 same-origin 部署，request 的 host header 必然等於 APP_BASE_URL host，
-  //         我們直接從 APP_BASE_URL 推導「可信 HTTPS host」，凡是 host 命中的
-  //         request，無條件改寫 x-forwarded-proto = 'https'，讓 issecure() 標準
-  //         路徑判定為 HTTPS，secure cookie 才寫得進去。
-  //   本地 dev：APP_BASE_URL=http://localhost:5173，protocol=http → trustedHttpsHost=null
-  //              → middleware no-op，不影響 HTTP 行為。
+  //   解法：production 部署保證所有流量都先經 K8s Envoy Gateway（HTTPRoute 在
+  //         listener 終止 TLS for roadmaps.zenbuapps.com），到達 POD 時原始
+  //         scheme 必為 HTTPS。因此無條件覆寫 x-forwarded-proto = 'https' 是
+  //         安全的，不需要 host 比對（host 字串可能因 port、大小寫、trailing dot、
+  //         內部 service name 而對不上，是脆弱的判斷依據）。
+  //   Dev：NODE_ENV !== 'production' 時 middleware 不註冊，
+  //        http://localhost:5173 ↔ http://localhost:3000 純 HTTP 流程不受影響。
   // --------------------------------------------------------------
-  const appBaseUrl = config.get<string>('APP_BASE_URL') ?? '';
-  const trustedHttpsHost: string | null = (() => {
-    try {
-      const u = new URL(appBaseUrl);
-      return u.protocol === 'https:' ? u.host.toLowerCase() : null;
-    } catch {
-      return null;
-    }
-  })();
-  if (trustedHttpsHost) {
+  if (isProduction) {
     app.use((req: Request, _res: Response, next: NextFunction) => {
-      const host = (req.headers.host ?? '').toLowerCase();
-      if (host === trustedHttpsHost) {
-        req.headers['x-forwarded-proto'] = 'https';
-      }
+      req.headers['x-forwarded-proto'] = 'https';
       next();
     });
-    logger.log(`Force XFP=https middleware enabled for host: ${trustedHttpsHost}`);
+    logger.log('Force XFP=https middleware enabled (production mode)');
   }
 
   // --------------------------------------------------------------
@@ -209,9 +198,7 @@ async function bootstrap(): Promise<void> {
   logger.log(`API ready on http://localhost:${port}/api`);
   logger.log(`CORS origins: ${allowedOrigins.join(', ') || '(none)'}`);
   logger.log(
-    `Cookie mode: sameSite=${cookieSameSite} secure=${cookieSecure} trustProxy=${
-      isProduction || needsCrossSite
-    }`,
+    `Cookie mode: sameSite=${cookieSameSite} secure=${cookieSecure} trustProxy=${trustProxy}`,
   );
 }
 
