@@ -1,0 +1,166 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: zenbu-cloud
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pnpm
+        run: corepack enable && corepack prepare pnpm@10.32.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared
+        run: pnpm build:shared
+
+      - name: Generate Prisma client
+        run: pnpm prisma:generate
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Build API
+        run: pnpm build:api
+
+      - name: Build Web
+        run: pnpm build:web
+
+  build-and-push:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: zenbu-cloud
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate image tag
+        id: tag
+        run: echo "sha=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & push API image
+        run: |
+          docker build -f apps/api/Dockerfile \
+            -t ghcr.io/zenbuapps/zenbu-roadmaps-api:${{ steps.tag.outputs.sha }} \
+            -t ghcr.io/zenbuapps/zenbu-roadmaps-api:latest \
+            .
+          docker push ghcr.io/zenbuapps/zenbu-roadmaps-api:${{ steps.tag.outputs.sha }}
+          docker push ghcr.io/zenbuapps/zenbu-roadmaps-api:latest
+
+      - name: Build & push Web image
+        run: |
+          docker build -f apps/web/Dockerfile \
+            --build-arg VITE_API_BASE_URL="" \
+            -t ghcr.io/zenbuapps/zenbu-roadmaps-web:${{ steps.tag.outputs.sha }} \
+            -t ghcr.io/zenbuapps/zenbu-roadmaps-web:latest \
+            .
+          docker push ghcr.io/zenbuapps/zenbu-roadmaps-web:${{ steps.tag.outputs.sha }}
+          docker push ghcr.io/zenbuapps/zenbu-roadmaps-web:latest
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: build-and-push
+    runs-on: zenbu-cloud
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          if [ -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
+            kubectl config set-cluster default --server=https://kubernetes.default.svc --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+            kubectl config set-credentials default --token=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+            kubectl config set-context default --cluster=default --user=default
+            kubectl config use-context default
+          fi
+
+      - name: Verify cluster access
+        run: kubectl get nodes
+
+      - name: Calculate image tag
+        id: tag
+        run: echo "sha=${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - name: Clean up stuck releases
+        run: |
+          NAMESPACE="zenburoadmaps-prod"
+          RELEASE="zenbu-roadmaps"
+          STATUS=$(helm status $RELEASE -n $NAMESPACE 2>/dev/null | grep STATUS | awk '{print $2}' || echo "not-found")
+          if [ "$STATUS" = "failed" ]; then
+            echo "Uninstalling failed release..."
+            helm uninstall $RELEASE -n $NAMESPACE || true
+          elif [[ "$STATUS" == pending-* ]]; then
+            echo "Rolling back pending release..."
+            helm rollback $RELEASE 0 -n $NAMESPACE || true
+          fi
+
+      - name: Create GHCR pull secret
+        run: |
+          GHCR_SECRET=$(echo -n '{"auths":{"ghcr.io":{"auth":"'$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64)'"}}}' | base64)
+          echo "GHCR_SECRET=$GHCR_SECRET" >> "$GITHUB_ENV"
+
+      - name: Deploy with Helm
+        run: |
+          IMAGE_TAG="${{ steps.tag.outputs.sha }}"
+          DB_PASSWORD="${{ secrets.PROD_DB_PASSWORD }}"
+          DATABASE_URL="postgresql://zenburoadmaps:${DB_PASSWORD}@zenburoadmaps-postgresql:5432/zenburoadmaps"
+
+          helm upgrade --install zenbu-roadmaps helm/zenbu-roadmaps/ \
+            -n zenburoadmaps-prod \
+            --set api.image.tag="$IMAGE_TAG" \
+            --set web.image.tag="$IMAGE_TAG" \
+            --set imagePullSecret="$GHCR_SECRET" \
+            --set postgresql.password="$DB_PASSWORD" \
+            --set api.secrets.DATABASE_URL="$DATABASE_URL" \
+            --set api.secrets.SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
+            --set api.secrets.SESSION_COOKIE_DOMAIN="${{ secrets.SESSION_COOKIE_DOMAIN }}" \
+            --set api.secrets.SESSION_COOKIE_SECURE="${{ secrets.SESSION_COOKIE_SECURE }}" \
+            --set api.secrets.APP_BASE_URL="${{ secrets.APP_BASE_URL }}" \
+            --set api.secrets.API_BASE_URL="${{ secrets.API_BASE_URL }}" \
+            --set api.secrets.CORS_ALLOWED_ORIGINS="${{ secrets.CORS_ALLOWED_ORIGINS }}" \
+            --set api.secrets.GOOGLE_OAUTH_CLIENT_ID="${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}" \
+            --set api.secrets.GOOGLE_OAUTH_CLIENT_SECRET="${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}" \
+            --set api.secrets.GOOGLE_OAUTH_CALLBACK_URL="${{ secrets.GOOGLE_OAUTH_CALLBACK_URL }}" \
+            --set api.secrets.ZENBU_ORG_WRITE_TOKEN="${{ secrets.ZENBU_ORG_WRITE_TOKEN }}" \
+            --set api.secrets.INITIAL_ADMIN_EMAILS="${{ secrets.INITIAL_ADMIN_EMAILS }}" \
+            --set api.secrets.BUNNY_CDN_URL="${{ secrets.BUNNY_CDN_URL }}" \
+            --set api.secrets.BUNNY_STORAGE_HOST="${{ secrets.BUNNY_STORAGE_HOST }}" \
+            --set api.secrets.BUNNY_STORAGE_ZONE="${{ secrets.BUNNY_STORAGE_ZONE }}" \
+            --set api.secrets.BUNNY_STORAGE_PASSWORD="${{ secrets.BUNNY_STORAGE_PASSWORD }}"
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/zenburoadmaps-api -n zenburoadmaps-prod --timeout=120s
+          kubectl rollout status deployment/zenburoadmaps-web -n zenburoadmaps-prod --timeout=120s
+
+      - name: Show deployment status
+        if: always()
+        run: |
+          kubectl get pods -n zenburoadmaps-prod
+          kubectl get svc -n zenburoadmaps-prod
+          kubectl get gateway -n zenburoadmaps-prod
+          kubectl get httproute -n zenburoadmaps-prod

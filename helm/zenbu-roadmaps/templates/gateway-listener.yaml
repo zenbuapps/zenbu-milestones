@@ -1,0 +1,29 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "zenbu-roadmaps.name" . }}-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "zenbu-roadmaps.labels" . | nindent 4 }}
+spec:
+  gatewayClassName: eg
+  listeners:
+    - name: http
+      hostname: {{ .Values.domain }}
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      hostname: {{ .Values.domain }}
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ .Values.tls.wildcardSecret }}
+      allowedRoutes:
+        namespaces:
+          from: Same

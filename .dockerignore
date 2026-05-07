@@ -1,0 +1,17 @@
+node_modules
+.git
+.github
+.claude
+.vscode
+.serena
+docs
+specs
+*.md
+.env
+.env.*
+*.log
+.DS_Store
+apps/api/dist
+apps/web/dist
+packages/shared/dist
+helm

@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "zenbu-roadmaps.name" . }}-web
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ include "zenbu-roadmaps.name" . }}-web
+    {{- include "zenbu-roadmaps.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.web.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "zenbu-roadmaps.name" . }}-web
+  template:
+    metadata:
+      labels:
+        app: {{ include "zenbu-roadmaps.name" . }}-web
+    spec:
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: ghcr-login
+      {{- end }}
+      containers:
+        - name: web
+          image: "{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}"
+          ports:
+            - containerPort: {{ .Values.web.port }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.web.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10

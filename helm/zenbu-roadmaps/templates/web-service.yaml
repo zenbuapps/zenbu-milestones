@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "zenbu-roadmaps.name" . }}-web
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: {{ include "zenbu-roadmaps.name" . }}-web
+    {{- include "zenbu-roadmaps.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "zenbu-roadmaps.name" . }}-web
+  ports:
+    - port: {{ .Values.web.port }}
+      targetPort: {{ .Values.web.port }}

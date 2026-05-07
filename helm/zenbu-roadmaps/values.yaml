@@ -1,0 +1,60 @@
+instance:
+  name: zenburoadmaps
+
+namespace: zenburoadmaps-prod
+domain: roadmaps.zenbuapps.com
+
+# API Service (NestJS)
+api:
+  image:
+    repository: ghcr.io/zenbuapps/zenbu-roadmaps-api
+    tag: latest
+  replicas: 1
+  port: 3000
+  env:
+    NODE_ENV: production
+    PORT: "3000"
+    GITHUB_ORG: zenbuapps
+  secrets:
+    DATABASE_URL: "postgresql://zenburoadmaps:change-me@zenburoadmaps-postgresql:5432/zenburoadmaps"
+    SESSION_SECRET: change-me
+    SESSION_COOKIE_DOMAIN: roadmaps.zenbuapps.com
+    SESSION_COOKIE_SECURE: "true"
+    APP_BASE_URL: "https://roadmaps.zenbuapps.com"
+    API_BASE_URL: "https://roadmaps.zenbuapps.com"
+    CORS_ALLOWED_ORIGINS: "https://roadmaps.zenbuapps.com"
+    GOOGLE_OAUTH_CLIENT_ID: ""
+    GOOGLE_OAUTH_CLIENT_SECRET: ""
+    GOOGLE_OAUTH_CALLBACK_URL: "https://roadmaps.zenbuapps.com/api/auth/google/callback"
+    ZENBU_ORG_WRITE_TOKEN: ""
+    INITIAL_ADMIN_EMAILS: ""
+    BUNNY_CDN_URL: ""
+    BUNNY_STORAGE_HOST: ""
+    BUNNY_STORAGE_ZONE: ""
+    BUNNY_STORAGE_PASSWORD: ""
+
+# Web Service (nginx)
+web:
+  image:
+    repository: ghcr.io/zenbuapps/zenbu-roadmaps-web
+    tag: latest
+  replicas: 1
+  port: 80
+
+# PostgreSQL Database
+postgresql:
+  enabled: true
+  database: zenburoadmaps
+  username: zenburoadmaps
+  password: change-me
+  storage: 10Gi
+  storageClass: local-path
+
+# TLS Configuration
+tls:
+  wildcardSecret: wildcard-zenbuapps-com-tls
+
+# Admin Account
+admin:
+  email: ""
+  password: ""
