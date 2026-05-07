@@ -55,6 +55,33 @@ pnpm prisma:migrate:dev    # 開發環境 migration
 
 **沒有 lint 設定**，**沒有測試框架** —— 別自己發明 `pnpm lint` / `pnpm test`。`tsc --noEmit` 是唯一的靜態檢查手段。
 
+## 本機 dev-login（繞過 Google OAuth）
+
+本地驗證 dashboard / 登入後 UI 時，**不需要**真的跑完 Google OAuth flow。後端 `AuthController` 提供 dev-only bypass endpoint，僅在 `NODE_ENV=development` 開放（其他環境一律 403）：
+
+```
+GET http://localhost:3000/api/auth/dev-login?email=j7.dev.gg@gmail.com
+```
+
+**運作機制**：
+- 後端用 `email` 查既有 user，沒有就以 `googleSub=dev-<email>` upsert 一筆
+- `req.login()` 把 user 寫進 session，`Set-Cookie: connect.sid=...` 回傳
+- 前端（http://localhost:5173/）後續 fetch `/api/*` 時瀏覽器自動帶 cookie，視同已登入
+- 若該 email 在 `.env` 的 `INITIAL_ADMIN_EMAILS` 名單中，自動授 `role=admin`
+
+**標準操作流程**（瀏覽器中執行）：
+1. 直接打開上述 URL → 看到 `{"success":true,"data":{...,"role":"admin"}}`，cookie 已寫入 localhost:3000 domain
+2. 打開 `http://localhost:5173/` → 進入 dashboard，`RequireAuthGate` 會放行
+
+**前置條件**（缺一不可，否則後端 boot 或 dev-login 會失敗）：
+- `.env` 至少含 `NODE_ENV=development`、`SESSION_SECRET`、`DATABASE_URL`、`GOOGLE_OAUTH_*`（可填 placeholder，dev-login 不會用到）、`ZENBU_ORG_WRITE_TOKEN`（非空字串即可）、`CORS_ALLOWED_ORIGINS=http://localhost:5173`
+- PostgreSQL 跑著且 prisma migrate 已執行（建議用獨立容器，例如 `docker run -d --name zenbu-roadmaps-postgres -p 5433:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=zenbu_roadmaps postgres:16-alpine`，配合 `DATABASE_URL=postgresql://postgres:dev@localhost:5433/zenbu_roadmaps`）
+- `pnpm dev:api` 在跑
+
+**注意**：
+- 此 endpoint 實作於 `apps/api/src/auth/auth.controller.ts::devLogin`，已硬擋 `NODE_ENV !== 'development'` → 403，不可能誤觸生產
+- 用 dev-login 進去之後，**Dashboard 仍會打 GitHub API**，若 PAT 是 placeholder 則 `/api/summary` 等會 401 / 失敗。要看真實資料把 `ZENBU_ORG_WRITE_TOKEN` 換成真 PAT 後重啟 dev:api
+
 ## 本地公開存取（Cloudflare Tunnel）
 
 本機後端（NestJS 監聽 port 3000，對應 `.env` 中的 `API_BASE_URL=http://localhost:3000`）透過 Cloudflare Tunnel 對外公開為 `https://local-roadmaps.powerhouse.tw`，用於需要 HTTPS 的整合情境（OAuth callback、webhook 測試等）。
