@@ -46,7 +46,7 @@ const OverviewPage = () => {
     <>
       <PageHeader
         title="總覽"
-        description="所有專案的 roadmap 進度與 roadmap"
+        description="所有專案的 roadmap 進度與 issue"
       />
 
       {/* 4 張 StatCard */}
