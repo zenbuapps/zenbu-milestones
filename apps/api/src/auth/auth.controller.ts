@@ -137,6 +137,50 @@ export class AuthController {
     }
   }
 
+  /**
+   * [TEMP-DEBUG] 強制寫一個 session，並把 server 端與 cookie 相關的所有事實
+   * 印到 X-Debug-* response headers，用於除錯 production secure cookie 寫不進的問題。
+   *
+   * 為何需要這個 endpoint：
+   *   - 過去三次 fix（trust proxy、forceXFP host-match、forceXFP unconditional）
+   *     都基於「猜測」推上線，**從未驗證過 production 實際的 req.secure / XFP / SESSION_COOKIE_SECURE**
+   *   - 直接打 GET /api/auth/google 觀察不到 Set-Cookie（passport state: false 不寫 session）
+   *   - 一般 API endpoint 不會 touch session（saveUninitialized=false）
+   *   - 唯一能驗證的方法：強制寫 session、印出 server state、看實際 Set-Cookie attributes
+   *
+   * 安全性：
+   *   - 公開 endpoint，但寫入的 session 只有 debugTouch 時間戳，無敏感資料
+   *   - session 自動 prune，不會堆積
+   *   - 確認問題後此 method 必須整段移除
+   */
+  @Get('debug-cookie')
+  async debugCookie(@Req() req: Request, @Res() res: Response): Promise<void> {
+    // 強制 touch session 以觸發 saveUninitialized=false 下的 Set-Cookie
+    const sessionAny = req.session as unknown as Record<string, unknown>;
+    sessionAny.debugTouch = Date.now();
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
+
+    res.setHeader('X-Debug-Node-Env', this.config.get<string>('NODE_ENV') ?? '(unset)');
+    res.setHeader('X-Debug-App-Base-Url', this.config.get<string>('APP_BASE_URL') ?? '(unset)');
+    res.setHeader(
+      'X-Debug-Cookie-Secure-Env',
+      this.config.get<string>('SESSION_COOKIE_SECURE') ?? '(unset)',
+    );
+    res.setHeader('X-Debug-Cors-Origins', this.config.get<string>('CORS_ALLOWED_ORIGINS') ?? '(unset)');
+    res.setHeader('X-Debug-Req-Secure', String(req.secure));
+    res.setHeader('X-Debug-Req-Protocol', String(req.protocol));
+    res.setHeader('X-Debug-Xfp', String(req.headers['x-forwarded-proto'] ?? '(none)'));
+    res.setHeader('X-Debug-Xff', String(req.headers['x-forwarded-for'] ?? '(none)'));
+    res.setHeader('X-Debug-Forwarded', String(req.headers['forwarded'] ?? '(none)'));
+    res.setHeader('X-Debug-Host', String(req.headers.host ?? '(none)'));
+    res.setHeader('X-Debug-Session-Id', String(req.sessionID));
+    res.setHeader('X-Debug-Build-Sha', process.env.BUILD_SHA ?? '(unset)');
+
+    res.json({ ok: true, sessionId: req.sessionID, touch: sessionAny.debugTouch });
+  }
+
   private getAppBaseUrl(): string {
     return this.config.get<string>('APP_BASE_URL') ?? 'http://localhost:5173';
   }
