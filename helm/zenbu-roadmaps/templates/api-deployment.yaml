@@ -15,6 +15,14 @@ spec:
     metadata:
       labels:
         app: {{ include "zenbu-roadmaps.name" . }}-api
+      annotations:
+        # 把 secret.yaml 渲染後的 SHA-256 hash 烙進 pod template。
+        # K8s Secret 的 stringData 透過 helm value 傳入，純改 secret 不會
+        # 動到 deployment template 文字 → helm 不認為要 rollout pod →
+        # pod 沿用啟動時的 env var 快照，新 secret 永遠讀不到。
+        # 這個 annotation 讓 secret 內容變動同步反映到 template hash，
+        # 強制 helm upgrade 觸發 pod rollout。
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
     spec:
       {{- if .Values.imagePullSecret }}
       imagePullSecrets:
