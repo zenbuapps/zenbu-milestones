@@ -45,17 +45,51 @@ export class AuthController {
   }
 
   /**
-   * Google 回呼。AuthGuard 會：
-   *   1. 交換 authorization code → token
-   *   2. 呼叫 GoogleStrategy.validate() 取得 user
-   *   3. 把 user 寫入 req.user 並建立 session（需 passport.session() middleware）
+   * Google 回呼。
    *
-   * 接著這裡只需 redirect 回前端主頁。
+   * 重要：@nestjs/passport 的 AuthGuard 採用 passport 的 custom-callback 形式
+   * 跑 passport.authenticate（見 node_modules/@nestjs/passport/dist/auth.guard.js
+   * line 80-88）。passport 文件明訂：在 custom callback 模式下，passport **不會**
+   * 自動呼叫 req.login，建立 session 是 application 端的責任：
+   *
+   *   > Note that when using a custom callback, it becomes the application's
+   *   > responsibility to establish a session (by calling req.login()) and send
+   *   > a response.
+   *
+   * 因此即使 strategy validate 成功、req.user 已 attach，session 仍然沒寫
+   * passport.user。express-session 的 saveUninitialized=false 看到 session
+   * 沒被 touch → 不會 setHeader('Set-Cookie', ...) → 瀏覽器拿不到 connect.sid
+   * → 後續 /api/me 永遠 401（這正是「Google 登入後又被踢回登入頁」的根因）。
+   *
+   * 修法：
+   *   1. req.login(user, cb) → 寫 session.passport.user
+   *   2. await req.session.save() → 確保 store async 寫完 + Set-Cookie 已掛上 response headers
+   *   3. 才 res.redirect → 避免 redirect 的 res.end 在 saveSession async 完成前 flush headers
    */
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
-  googleCallback(@Res() res: Response): void {
+  async googleCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     const target = this.getAppBaseUrl();
+    const user = req.user;
+
+    if (!user) {
+      this.logger.warn('Google callback 進來但 req.user 為空，跳過 req.login');
+      res.redirect(target);
+      return;
+    }
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        req.login(user, (err) => (err ? reject(err) : resolve()));
+      });
+      await new Promise<void>((resolve, reject) => {
+        req.session.save((err) => (err ? reject(err) : resolve()));
+      });
+    } catch (err) {
+      this.logger.error('Google callback session establishment 失敗', err as Error);
+      // 失敗也回登入頁，由前端的 RequireAuthGate 提示重試
+    }
+
     res.redirect(target);
   }
 
