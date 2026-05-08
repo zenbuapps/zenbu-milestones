@@ -150,23 +150,6 @@ async function bootstrap(): Promise<void> {
   );
 
   // --------------------------------------------------------------
-  // [TEMP-DEBUG] OAuth callback 路徑攔截：印出 trust-proxy 解析結果與原始 XFP header
-  //   排查 prod 登入後 connect.sid cookie 寫不進的問題。
-  //   確認修好之後可以連同此 middleware 整段移除（或改為 isDevelopment 才印）。
-  // --------------------------------------------------------------
-  app.use((req: Request, _res: Response, next: NextFunction) => {
-    if (req.path.startsWith('/api/auth/google/callback') || req.path === '/api/auth/google') {
-      logger.log(
-        `[OAUTH-DEBUG] path=${req.path} secure=${req.secure} protocol=${req.protocol} ` +
-          `xfp=${req.headers['x-forwarded-proto'] ?? '(none)'} ` +
-          `xff=${req.headers['x-forwarded-for'] ?? '(none)'} ` +
-          `host=${req.headers.host}`,
-      );
-    }
-    next();
-  });
-
-  // --------------------------------------------------------------
   // Passport：initialize + session deserialize
   // --------------------------------------------------------------
   app.use(passport.initialize());
