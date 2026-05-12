@@ -1,4 +1,11 @@
-import { CheckCircle2, CircleDot, Inbox, Milestone as RoadmapIcon } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  CircleDot,
+  Inbox,
+  Milestone as RoadmapIcon,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { IssueLite, RepoDetail } from 'shared';
 import { formatTimeAgo } from '../utils/date';
@@ -229,68 +236,128 @@ type TIssueRowProps = {
   roadmapTitle: string | null;
 };
 
+/** Issue body 預覽截斷字數；超過則收合並提供展開按鈕 */
+const BODY_PREVIEW_LIMIT = 240;
+
 /**
- * 單列 issue：state icon + 標題（外連 GitHub）+ meta 列
+ * 單列 issue：state icon + 標題（外連 GitHub）+ meta 列 + body 預覽
  */
-const IssueRow = ({ issue, keyword, roadmapNumber, roadmapTitle }: TIssueRowProps) => (
-  <li className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[--color-surface-overlay] sm:px-5 sm:py-3.5">
-    <span className="mt-0.5 flex-shrink-0">
-      {issue.state === 'open' ? (
-        <CircleDot size={16} strokeWidth={2.25} className="text-green-600" />
-      ) : (
-        <CheckCircle2 size={16} strokeWidth={2.25} className="text-purple-600" />
-      )}
-    </span>
+const IssueRow = ({ issue, keyword, roadmapNumber, roadmapTitle }: TIssueRowProps) => {
+  const [bodyExpanded, setBodyExpanded] = useState(false);
 
-    <div className="min-w-0 flex-1">
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <a
-          href={issue.htmlUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-medium text-[--color-text-primary] hover:text-[--color-brand] hover:underline"
-        >
-          <HighlightedText text={issue.title} keyword={keyword} />
-        </a>
-        {issue.labels.map((label) => (
-          <IssueLabel key={label.name} name={label.name} color={label.color} />
-        ))}
-      </div>
-
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[--color-text-muted]">
-        <span className="font-mono">#{issue.number}</span>
-        <span>
-          {issue.state === 'open' ? '建立於' : '關閉於'}{' '}
-          {formatTimeAgo(issue.closedAt ?? issue.createdAt)}
-        </span>
-        {roadmapNumber !== null && roadmapTitle !== null && (
-          <span className="inline-flex items-center gap-1 text-[--color-text-secondary]">
-            <RoadmapIcon size={12} strokeWidth={2.25} />
-            {roadmapTitle}
-          </span>
+  return (
+    <li className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[--color-surface-overlay] sm:px-5 sm:py-3.5">
+      <span className="mt-0.5 flex-shrink-0">
+        {issue.state === 'open' ? (
+          <CircleDot size={16} strokeWidth={2.25} className="text-green-600" />
+        ) : (
+          <CheckCircle2 size={16} strokeWidth={2.25} className="text-purple-600" />
         )}
-        {issue.assignees.length > 0 && (
-          <span className="flex items-center gap-1">
-            <span className="flex -space-x-1.5">
-              {issue.assignees.slice(0, 3).map((login) => (
-                <img
-                  key={login}
-                  src={`https://github.com/${login}.png?size=24`}
-                  alt={login}
-                  title={login}
-                  className="h-4 w-4 rounded-full border border-white bg-[--color-surface-overlay]"
-                />
-              ))}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <a
+            href={issue.htmlUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-medium text-[--color-text-primary] hover:text-[--color-brand] hover:underline"
+          >
+            <HighlightedText text={issue.title} keyword={keyword} />
+          </a>
+          {issue.labels.map((label) => (
+            <IssueLabel key={label.name} name={label.name} color={label.color} />
+          ))}
+        </div>
+
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[--color-text-muted]">
+          <span className="font-mono">#{issue.number}</span>
+          <span>
+            {issue.state === 'open' ? '建立於' : '關閉於'}{' '}
+            {formatTimeAgo(issue.closedAt ?? issue.createdAt)}
+          </span>
+          {roadmapNumber !== null && roadmapTitle !== null && (
+            <span className="inline-flex items-center gap-1 text-[--color-text-secondary]">
+              <RoadmapIcon size={12} strokeWidth={2.25} />
+              {roadmapTitle}
             </span>
-            {issue.assignees.length > 3 && (
-              <span>+{issue.assignees.length - 3}</span>
-            )}
-          </span>
-        )}
+          )}
+          {issue.assignees.length > 0 && (
+            <span className="flex items-center gap-1">
+              <span className="flex -space-x-1.5">
+                {issue.assignees.slice(0, 3).map((login) => (
+                  <img
+                    key={login}
+                    src={`https://github.com/${login}.png?size=24`}
+                    alt={login}
+                    title={login}
+                    className="h-4 w-4 rounded-full border border-white bg-[--color-surface-overlay]"
+                  />
+                ))}
+              </span>
+              {issue.assignees.length > 3 && (
+                <span>+{issue.assignees.length - 3}</span>
+              )}
+            </span>
+          )}
+        </div>
+
+        <IssueBody
+          body={issue.body}
+          expanded={bodyExpanded}
+          onToggle={() => setBodyExpanded((v) => !v)}
+        />
       </div>
+    </li>
+  );
+};
+
+type TIssueBodyProps = {
+  body: string | null;
+  expanded: boolean;
+  onToggle: () => void;
+};
+
+/**
+ * Issue body 顯示區：保留換行的純文字呈現，超過 BODY_PREVIEW_LIMIT 時截斷並提供展開
+ * - body 為 null：不渲染
+ * - body 短於 limit：直接顯示，無切換按鈕
+ * - body 長於 limit：預設截斷顯示「...」，展開後顯示完整內容並切換為「收合」
+ */
+const IssueBody = ({ body, expanded, onToggle }: TIssueBodyProps) => {
+  if (body === null) return null;
+  const isTruncatable = body.length > BODY_PREVIEW_LIMIT;
+  const display = !expanded && isTruncatable
+    ? body.slice(0, BODY_PREVIEW_LIMIT).trimEnd() + '…'
+    : body;
+  return (
+    <div className="mt-2 rounded-md bg-[--color-surface] px-3 py-2 text-xs text-[--color-text-secondary]">
+      <pre className="whitespace-pre-wrap break-words font-sans leading-relaxed">
+        {display}
+      </pre>
+      {isTruncatable && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[--color-brand] hover:underline"
+          aria-expanded={expanded}
+        >
+          {expanded ? (
+            <>
+              <ChevronUp size={12} strokeWidth={2.25} />
+              收合
+            </>
+          ) : (
+            <>
+              <ChevronDown size={12} strokeWidth={2.25} />
+              展開
+            </>
+          )}
+        </button>
+      )}
     </div>
-  </li>
-);
+  );
+};
 
 type TIssueLabelProps = {
   name: string;

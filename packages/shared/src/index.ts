@@ -246,6 +246,8 @@ export interface IssueLite {
   updatedAt: string;
   /** ISO 8601；state='open' 時為 null */
   closedAt: string | null;
+  /** Issue body markdown 原文；GitHub 回傳 null 或空字串時為 null */
+  body: string | null;
 }
 
 /** 單個 roadmap 的完整資料（含 issues） */

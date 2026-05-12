@@ -118,6 +118,7 @@ function toIssueLite(issues: OctokitIssue[]): IssueLite[] {
       createdAt: i.created_at,
       updatedAt: i.updated_at,
       closedAt: i.closed_at,
+      body: i.body && i.body.trim() !== '' ? i.body : null,
     }));
 }
 
