@@ -1,4 +1,12 @@
-import { AlertOctagon, ExternalLink, FileText, LogIn, RefreshCw } from 'lucide-react';
+import {
+  AlertOctagon,
+  ExternalLink,
+  FileText,
+  Loader2,
+  LogIn,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import type { SubmittedIssueDTO } from 'shared';
@@ -7,7 +15,8 @@ import EmptyState from '../components/EmptyState';
 import IssueStatusBadge from '../components/IssueStatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
 import PageHeader from '../components/PageHeader';
-import { ApiError, fetchMyIssues } from '../data/api';
+import { useToast } from '../components/Toast/useToast';
+import { ApiError, fetchMyIssues, withdrawMyIssue } from '../data/api';
 import { formatTimeAgo } from '../utils/date';
 
 /**
@@ -26,10 +35,61 @@ type TFetchState =
 
 const MyIssuesPage = () => {
   const { session } = useOutletContext<TAppShellContext>();
+  const { showToast } = useToast();
   const [state, setState] = useState<TFetchState>({ status: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
+  /** 撤銷中的 issue id；同時間只允許一個撤銷請求 in-flight，按鈕轉 spinner */
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
 
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  /**
+   * 撤銷指定 issue。
+   * - 使用者必須在 confirm 對話框按確認
+   * - 成功：樂觀地從 state 把該列移除（不必重打 listMine）
+   * - 失敗：依錯誤分類顯示 toast；status 已變動（409）時主動 refresh 拉新資料
+   */
+  const handleWithdraw = useCallback(
+    async (issue: SubmittedIssueDTO) => {
+      const ok = window.confirm(
+        `確定要撤銷這則 issue 嗎？\n\n標題：${issue.title}\n\n撤銷後此筆會從清單移除，無法復原。`,
+      );
+      if (!ok) return;
+
+      setWithdrawingId(issue.id);
+      try {
+        await withdrawMyIssue(issue.id);
+        setState((prev) =>
+          prev.status === 'ok'
+            ? { status: 'ok', issues: prev.issues.filter((i) => i.id !== issue.id) }
+            : prev,
+        );
+        showToast({ type: 'success', message: '已撤銷此 issue' });
+      } catch (err: unknown) {
+        if (err instanceof ApiError) {
+          if (err.httpStatus === 409) {
+            showToast({
+              type: 'error',
+              message: 'issue 狀態已變動（可能剛被審核），自動重新整理',
+            });
+            refresh();
+          } else if (err.httpStatus === 403) {
+            showToast({ type: 'error', message: '僅能撤銷自己提交的 issue' });
+          } else if (err.httpStatus === 404) {
+            showToast({ type: 'error', message: '找不到該 issue（可能已被移除）' });
+            refresh();
+          } else {
+            showToast({ type: 'error', message: err.message || '撤銷失敗，請稍後重試' });
+          }
+        } else {
+          showToast({ type: 'error', message: '撤銷失敗，請稍後重試' });
+        }
+      } finally {
+        setWithdrawingId(null);
+      }
+    },
+    [refresh, showToast],
+  );
 
   useEffect(() => {
     // session 還在 loading / unavailable / unauthenticated 時不打後端
@@ -168,7 +228,13 @@ const MyIssuesPage = () => {
       {state.status === 'ok' && state.issues.length > 0 && (
         <ul className="flex flex-col gap-2">
           {state.issues.map((issue) => (
-            <IssueRow key={issue.id} issue={issue} />
+            <IssueRow
+              key={issue.id}
+              issue={issue}
+              onWithdraw={handleWithdraw}
+              isWithdrawing={withdrawingId === issue.id}
+              disableWithdraw={withdrawingId !== null && withdrawingId !== issue.id}
+            />
           ))}
         </ul>
       )}
@@ -176,12 +242,23 @@ const MyIssuesPage = () => {
   );
 };
 
+type TIssueRowProps = {
+  issue: SubmittedIssueDTO;
+  /** 點下撤銷按鈕時呼叫；只在 status === 'pending' 時會傳入有意義行為 */
+  onWithdraw: (issue: SubmittedIssueDTO) => void;
+  /** 此列正在撤銷（顯示 spinner、停用按鈕） */
+  isWithdrawing: boolean;
+  /** 別列正在撤銷時 disable 本列按鈕，避免同時多請求 */
+  disableWithdraw: boolean;
+};
+
 /**
- * 單列顯示：標題 + repo + 狀態 + 時間 + 連結
+ * 單列顯示：標題 + repo + 狀態 + 時間 + 連結 + 撤銷按鈕
  * - 已同步 GitHub：顯示 GitHub URL 外連
  * - 已拒絕：顯示拒絕原因（rejectReason）
+ * - status === 'pending'：右側額外顯示「撤銷」按鈕（issue #6）
  */
-const IssueRow = ({ issue }: { issue: SubmittedIssueDTO }) => {
+const IssueRow = ({ issue, onWithdraw, isWithdrawing, disableWithdraw }: TIssueRowProps) => {
   const repoSlug = `${issue.repoOwner}/${issue.repoName}`;
   const repoHashLink = `/repo/${issue.repoName}`;
   return (
@@ -213,18 +290,38 @@ const IssueRow = ({ issue }: { issue: SubmittedIssueDTO }) => {
           )}
         </div>
 
-        {issue.githubIssueUrl && (
-          <a
-            href={issue.githubIssueUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-ghost flex-shrink-0"
-            aria-label="開啟 GitHub issue"
-          >
-            <ExternalLink size={14} strokeWidth={2} />
-            <span className="hidden sm:inline">GitHub</span>
-          </a>
-        )}
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {issue.status === 'pending' && (
+            <button
+              type="button"
+              onClick={() => onWithdraw(issue)}
+              disabled={isWithdrawing || disableWithdraw}
+              className="btn-ghost text-[--color-error] hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="撤銷此 issue"
+              title="撤銷此 issue"
+            >
+              {isWithdrawing ? (
+                <Loader2 size={14} strokeWidth={2} className="animate-spin" />
+              ) : (
+                <Trash2 size={14} strokeWidth={2} />
+              )}
+              <span className="hidden sm:inline">撤銷</span>
+            </button>
+          )}
+
+          {issue.githubIssueUrl && (
+            <a
+              href={issue.githubIssueUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-ghost"
+              aria-label="開啟 GitHub issue"
+            >
+              <ExternalLink size={14} strokeWidth={2} />
+              <span className="hidden sm:inline">GitHub</span>
+            </a>
+          )}
+        </div>
       </div>
     </li>
   );

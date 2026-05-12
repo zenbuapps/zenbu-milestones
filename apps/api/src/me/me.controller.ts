@@ -1,4 +1,12 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import type { User } from '@prisma/client';
 import type { Request } from 'express';
 import type { SessionUserDTO, SubmittedIssueDTO } from 'shared';
@@ -45,5 +53,19 @@ export class MeController {
   async myIssues(@Req() req: AuthedRequest): Promise<ApiSuccess<SubmittedIssueDTO[]>> {
     const data = await this.issuesService.listMine(req.user.id);
     return { success: true, data };
+  }
+
+  /**
+   * 撤銷自己提的 pending issue（issue #6）。
+   * Service 層會把 404 / 403 / 409 投擲為對應的 Nest 例外。
+   */
+  @Delete('issues/:id')
+  @HttpCode(200)
+  async withdrawIssue(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+  ): Promise<ApiSuccess<{ id: string }>> {
+    await this.issuesService.withdrawMine(id, req.user.id);
+    return { success: true, data: { id } };
   }
 }

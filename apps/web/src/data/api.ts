@@ -156,6 +156,21 @@ export async function fetchMyIssues(): Promise<SubmittedIssueDTO[]> {
 }
 
 /**
+ * 撤銷自己提的 pending issue（issue #6）
+ * 走 `DELETE /api/me/issues/:id`；後端僅允許 status=pending 且作者本人。
+ * 失敗時 throw ApiError：
+ *   - 401 未登入
+ *   - 403 不是作者
+ *   - 404 找不到（可能已被別處刪掉）
+ *   - 409 已不是 pending（例如剛剛被 admin 通過/拒絕）
+ */
+export async function withdrawMyIssue(issueId: string): Promise<void> {
+  await apiFetch<{ id: string }>(`/api/me/issues/${encodeURIComponent(issueId)}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
  * 上傳一張圖片到後端 → Bunny CDN，回 public URL。
  * 用於 IssueSubmitForm 的 paste / drop image 支援。
  *

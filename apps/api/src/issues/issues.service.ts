@@ -128,6 +128,50 @@ export class IssuesService {
   }
 
   /**
+   * 使用者撤銷自己的 pending issue。
+   *
+   * 規則（issue #6）：
+   *   - 404：issue 不存在
+   *   - 403：呼叫者不是該 issue 的作者
+   *   - 409：status !== pending（approved / rejected / synced_to_github 都不能撤）
+   *   - 成功：hard delete 整列（不留 placeholder），並寫 audit log（actor = 作者自己）
+   *
+   * 為什麼 hard delete：
+   *   pending 的 issue 對外只在 SubmittedIssueDTO[]（自己看）+ AdminIssueRow[]（admin 列表）
+   *   出現過，沒有指向它的 GitHub side-effect。Soft delete 會需要在 listMine / listAll
+   *   全面加 deletedAt is null filter，churn 比較大。
+   */
+  async withdrawMine(issueId: string, authorId: string): Promise<void> {
+    const existing = await this.prisma.issue.findUnique({ where: { id: issueId } });
+    if (!existing) {
+      throw new NotFoundException(`找不到 issue: ${issueId}`);
+    }
+    if (existing.authorId !== authorId) {
+      throw new ForbiddenException('僅能撤銷自己提交的 issue');
+    }
+    if (existing.status !== 'pending') {
+      throw new ConflictException(
+        `issue 狀態為 ${prismaStatusToApi(existing.status)}，僅 pending 可撤銷`,
+      );
+    }
+
+    await this.prisma.issue.delete({ where: { id: issueId } });
+
+    await this.audit.log({
+      actorId: authorId,
+      action: 'issue.withdraw',
+      targetType: 'issue',
+      targetId: issueId,
+      payload: {
+        issueId,
+        repoOwner: existing.repoOwner,
+        repoName: existing.repoName,
+        title: existing.title,
+      },
+    });
+  }
+
+  /**
    * Admin 列表。
    * - status === 'all' 或未提供 → 不加 where
    * - 否則依 status filter
