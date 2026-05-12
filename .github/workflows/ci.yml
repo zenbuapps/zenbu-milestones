@@ -135,31 +135,65 @@ jobs:
           echo "GHCR_SECRET=$GHCR_SECRET" >> "$GITHUB_ENV"
 
       - name: Deploy with Helm
+        env:
+          IMAGE_TAG: ${{ steps.tag.outputs.sha }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_PASSWORD }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          SESSION_COOKIE_SECURE: ${{ secrets.SESSION_COOKIE_SECURE }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          CORS_ALLOWED_ORIGINS: ${{ secrets.CORS_ALLOWED_ORIGINS }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_CALLBACK_URL: ${{ secrets.GOOGLE_OAUTH_CALLBACK_URL }}
+          ZENBU_ORG_WRITE_TOKEN: ${{ secrets.ZENBU_ORG_WRITE_TOKEN }}
+          INITIAL_ADMIN_EMAILS: ${{ secrets.INITIAL_ADMIN_EMAILS }}
+          BUNNY_CDN_URL: ${{ secrets.BUNNY_CDN_URL }}
+          BUNNY_STORAGE_HOST: ${{ secrets.BUNNY_STORAGE_HOST }}
+          BUNNY_STORAGE_ZONE: ${{ secrets.BUNNY_STORAGE_ZONE }}
+          BUNNY_STORAGE_PASSWORD: ${{ secrets.BUNNY_STORAGE_PASSWORD }}
         run: |
-          IMAGE_TAG="${{ steps.tag.outputs.sha }}"
-          DB_PASSWORD="${{ secrets.PROD_DB_PASSWORD }}"
+          set -eu
           DATABASE_URL="postgresql://zenburoadmaps:${DB_PASSWORD}@zenburoadmaps-postgresql:5432/zenburoadmaps"
+
+          # Escape ' to '' for YAML single-quoted scalar
+          yq_escape() { printf '%s' "$1" | sed "s/'/''/g"; }
+
+          # Write all values to an override file. `-f` avoids `helm --set`
+          # interpreting commas inside secret values (e.g. CORS_ALLOWED_ORIGINS,
+          # INITIAL_ADMIN_EMAILS) as field separators.
+          OVERRIDE_FILE="$(mktemp -t helm-override.XXXXXX.yaml)"
+          trap 'rm -f "$OVERRIDE_FILE"' EXIT
+
+          cat > "$OVERRIDE_FILE" <<EOF
+          api:
+            image:
+              tag: '$(yq_escape "$IMAGE_TAG")'
+            secrets:
+              DATABASE_URL: '$(yq_escape "$DATABASE_URL")'
+              SESSION_SECRET: '$(yq_escape "$SESSION_SECRET")'
+              SESSION_COOKIE_SECURE: '$(yq_escape "$SESSION_COOKIE_SECURE")'
+              APP_BASE_URL: '$(yq_escape "$APP_BASE_URL")'
+              CORS_ALLOWED_ORIGINS: '$(yq_escape "$CORS_ALLOWED_ORIGINS")'
+              GOOGLE_OAUTH_CLIENT_ID: '$(yq_escape "$GOOGLE_OAUTH_CLIENT_ID")'
+              GOOGLE_OAUTH_CLIENT_SECRET: '$(yq_escape "$GOOGLE_OAUTH_CLIENT_SECRET")'
+              GOOGLE_OAUTH_CALLBACK_URL: '$(yq_escape "$GOOGLE_OAUTH_CALLBACK_URL")'
+              ZENBU_ORG_WRITE_TOKEN: '$(yq_escape "$ZENBU_ORG_WRITE_TOKEN")'
+              INITIAL_ADMIN_EMAILS: '$(yq_escape "$INITIAL_ADMIN_EMAILS")'
+              BUNNY_CDN_URL: '$(yq_escape "$BUNNY_CDN_URL")'
+              BUNNY_STORAGE_HOST: '$(yq_escape "$BUNNY_STORAGE_HOST")'
+              BUNNY_STORAGE_ZONE: '$(yq_escape "$BUNNY_STORAGE_ZONE")'
+              BUNNY_STORAGE_PASSWORD: '$(yq_escape "$BUNNY_STORAGE_PASSWORD")'
+          web:
+            image:
+              tag: '$(yq_escape "$IMAGE_TAG")'
+          imagePullSecret: '$(yq_escape "$GHCR_SECRET")'
+          postgresql:
+            password: '$(yq_escape "$DB_PASSWORD")'
+          EOF
 
           helm upgrade --install zenbu-roadmaps helm/zenbu-roadmaps/ \
             -n zenburoadmaps-prod \
-            --set api.image.tag="$IMAGE_TAG" \
-            --set web.image.tag="$IMAGE_TAG" \
-            --set imagePullSecret="$GHCR_SECRET" \
-            --set postgresql.password="$DB_PASSWORD" \
-            --set api.secrets.DATABASE_URL="$DATABASE_URL" \
-            --set api.secrets.SESSION_SECRET="${{ secrets.SESSION_SECRET }}" \
-            --set api.secrets.SESSION_COOKIE_SECURE="${{ secrets.SESSION_COOKIE_SECURE }}" \
-            --set api.secrets.APP_BASE_URL="${{ secrets.APP_BASE_URL }}" \
-            --set api.secrets.CORS_ALLOWED_ORIGINS="${{ secrets.CORS_ALLOWED_ORIGINS }}" \
-            --set api.secrets.GOOGLE_OAUTH_CLIENT_ID="${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}" \
-            --set api.secrets.GOOGLE_OAUTH_CLIENT_SECRET="${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}" \
-            --set api.secrets.GOOGLE_OAUTH_CALLBACK_URL="${{ secrets.GOOGLE_OAUTH_CALLBACK_URL }}" \
-            --set api.secrets.ZENBU_ORG_WRITE_TOKEN="${{ secrets.ZENBU_ORG_WRITE_TOKEN }}" \
-            --set api.secrets.INITIAL_ADMIN_EMAILS="${{ secrets.INITIAL_ADMIN_EMAILS }}" \
-            --set api.secrets.BUNNY_CDN_URL="${{ secrets.BUNNY_CDN_URL }}" \
-            --set api.secrets.BUNNY_STORAGE_HOST="${{ secrets.BUNNY_STORAGE_HOST }}" \
-            --set api.secrets.BUNNY_STORAGE_ZONE="${{ secrets.BUNNY_STORAGE_ZONE }}" \
-            --set api.secrets.BUNNY_STORAGE_PASSWORD="${{ secrets.BUNNY_STORAGE_PASSWORD }}"
+            -f "$OVERRIDE_FILE"
 
       - name: Verify deployment
         run: |
