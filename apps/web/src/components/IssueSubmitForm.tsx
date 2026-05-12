@@ -4,8 +4,6 @@ import {
   Eye,
   ImagePlus,
   Loader2,
-  Maximize2,
-  Minimize2,
   Pencil,
 } from 'lucide-react';
 import {
@@ -23,6 +21,7 @@ import {
 } from 'react';
 import { ISSUE_BODY_MAX, ISSUE_TITLE_MAX } from 'shared';
 import { ApiError, createIssue, uploadImage } from '../data/api';
+import { useIsDialogFullscreen } from './IssueSubmitDialog';
 import LoadingSpinner from './LoadingSpinner';
 import { useToast } from './Toast/useToast';
 
@@ -103,8 +102,9 @@ const IssueSubmitForm = ({
   const [uploadingCount, setUploadingCount] = useState(0);
   // 包住 MDEditor 的 div，用來抓內部 textarea 做 cursor 操作
   const editorWrapperRef = useRef<HTMLDivElement>(null);
-  // 「獨立全螢幕」state：比 MDEditor 內建那個小按鈕更顯眼，給需要長篇編輯的場景
-  const [isEditorFullscreen, setIsEditorFullscreen] = useState(false);
+  // 全螢幕狀態由 IssueSubmitDialog 持有（issue #5），這裡只讀；MDEditor 高度
+  // 依 dialog 是否處於全螢幕作對應切換
+  const isDialogFullscreen = useIsDialogFullscreen();
   // 預覽模式：edit = 只編輯 / live = 分屏（預設）/ preview = 只預覽
   // 我們自己做 segmented control，搭 CSS 隱藏 MDEditor 原生 toolbar 右側那組
   const [previewMode, setPreviewMode] = useState<'edit' | 'live' | 'preview'>('live');
@@ -112,41 +112,18 @@ const IssueSubmitForm = ({
   const [editorHeight, setEditorHeight] = useState(320);
   const { showToast } = useToast();
 
-  // 依 fullscreen 與 window size 調整編輯器高度
+  // 依 dialog fullscreen 與 window size 調整編輯器高度
   useEffect(() => {
-    if (!isEditorFullscreen) {
+    if (!isDialogFullscreen) {
       setEditorHeight(320);
       return;
     }
-    const update = () => setEditorHeight(Math.max(400, window.innerHeight - 200));
+    // 全螢幕 dialog 下：扣掉 header + 表單其他欄位（標題輸入 + 送出區）約 280px
+    const update = () => setEditorHeight(Math.max(400, window.innerHeight - 280));
     update();
     window.addEventListener('resize', update);
     return () => window.removeEventListener('resize', update);
-  }, [isEditorFullscreen]);
-
-  // Fullscreen 時攔截 ESC：優先結束 fullscreen 而非關閉 Dialog
-  // 用 capture phase 確保先於 Dialog 的 keydown listener 執行
-  useEffect(() => {
-    if (!isEditorFullscreen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        setIsEditorFullscreen(false);
-      }
-    };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
-  }, [isEditorFullscreen]);
-
-  // fullscreen 時鎖 body scroll（雖然 Dialog 已鎖，保險多鎖一次；卸載時還原）
-  useEffect(() => {
-    if (!isEditorFullscreen) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [isEditorFullscreen]);
+  }, [isDialogFullscreen]);
 
   const titleLen = title.length;
   const titleOver = titleLen > ISSUE_TITLE_MAX;
@@ -371,52 +348,18 @@ const IssueSubmitForm = ({
                 title="只顯示預覽（隱藏編輯器）"
               />
             </div>
-
-            <button
-              type="button"
-              onClick={() => setIsEditorFullscreen((v) => !v)}
-              className="btn-ghost text-xs"
-              aria-label={isEditorFullscreen ? '結束全螢幕編輯' : '開啟全螢幕編輯'}
-              aria-pressed={isEditorFullscreen}
-              title={isEditorFullscreen ? '結束全螢幕（ESC）' : '全螢幕編輯（適合長文）'}
-            >
-              {isEditorFullscreen ? (
-                <Minimize2 size={13} strokeWidth={2} />
-              ) : (
-                <Maximize2 size={13} strokeWidth={2} />
-              )}
-              {isEditorFullscreen ? '結束全螢幕' : '全螢幕'}
-            </button>
+            {/* 全螢幕按鈕已移至 IssueSubmitDialog header（issue #5）—— 由 dialog
+                整體切換 fixed inset-0，使用者按 dialog 右上角的 Maximize 圖示觸發 */}
           </div>
         </div>
         <div
           ref={editorWrapperRef}
           data-color-mode="light"
-          className={
-            isEditorFullscreen
-              ? 'fixed inset-0 z-[100] flex flex-col bg-white p-4 shadow-2xl'
-              : 'overflow-hidden rounded-lg border border-[--color-border]'
-          }
+          className="overflow-hidden rounded-lg border border-[--color-border]"
           onPaste={handleEditorPaste}
           onDrop={handleEditorDrop}
           onDragOver={handleEditorDragOver}
         >
-          {isEditorFullscreen && (
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-[--color-text-primary]">
-                全螢幕編輯 — {repoOwner}/{repoName}
-              </h2>
-              <button
-                type="button"
-                onClick={() => setIsEditorFullscreen(false)}
-                className="btn-secondary"
-                aria-label="結束全螢幕編輯"
-              >
-                <Minimize2 size={14} strokeWidth={2} />
-                結束全螢幕（ESC）
-              </button>
-            </div>
-          )}
           <Suspense
             fallback={
               <div className="flex h-64 flex-1 items-center justify-center bg-[--color-surface]">
@@ -424,20 +367,18 @@ const IssueSubmitForm = ({
               </div>
             }
           >
-            <div className={isEditorFullscreen ? 'flex-1 overflow-hidden' : ''}>
-              <MDEditor
-                id="issue-body"
-                value={body}
-                onChange={(v) => setBody(v ?? '')}
-                height={editorHeight}
-                preview={previewMode}
-                visibleDragbar={false}
-                textareaProps={{
-                  placeholder: '支援 Markdown 語法，可即時預覽。截圖後 Ctrl+V 直接貼上',
-                  disabled: isSubmitting,
-                }}
-              />
-            </div>
+            <MDEditor
+              id="issue-body"
+              value={body}
+              onChange={(v) => setBody(v ?? '')}
+              height={editorHeight}
+              preview={previewMode}
+              visibleDragbar={false}
+              textareaProps={{
+                placeholder: '支援 Markdown 語法，可即時預覽。截圖後 Ctrl+V 直接貼上',
+                disabled: isSubmitting,
+              }}
+            />
           </Suspense>
         </div>
         <div className="mt-1 flex items-center justify-between text-xs">
