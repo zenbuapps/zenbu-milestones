@@ -2,7 +2,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [master]
+    branches: [master, dev]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -43,7 +43,7 @@ jobs:
         run: pnpm build:web
 
   build-and-push:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
     needs: test
     runs-on: zenbu-cloud
     permissions:
