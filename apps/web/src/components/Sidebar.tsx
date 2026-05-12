@@ -1,5 +1,5 @@
-import { ChevronRight, LayoutDashboard, Lock, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ChevronRight, LayoutDashboard, Lock, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { RepoSummary, Summary } from 'shared';
 
@@ -30,6 +30,7 @@ const sortByName = (a: RepoSummary, b: RepoSummary): number =>
  */
 const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProps) => {
   const [showOthers, setShowOthers] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const { withRoadmaps, withoutRoadmaps } = useMemo(() => {
     if (!summary) {
@@ -40,10 +41,28 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
     const visible = hiddenRepos && hiddenRepos.size > 0
       ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
       : summary.repos;
-    const active = visible.filter((r) => r.roadmapCount > 0).slice().sort(sortByName);
-    const inactive = visible.filter((r) => r.roadmapCount === 0).slice().sort(sortByName);
+    const needle = searchQuery.trim().toLowerCase();
+    const matchesQuery = (r: RepoSummary): boolean =>
+      needle === '' || r.name.toLowerCase().includes(needle);
+    const active = visible
+      .filter((r) => r.roadmapCount > 0)
+      .filter(matchesQuery)
+      .slice()
+      .sort(sortByName);
+    const inactive = visible
+      .filter((r) => r.roadmapCount === 0)
+      .filter(matchesQuery)
+      .slice()
+      .sort(sortByName);
     return { withRoadmaps: active, withoutRoadmaps: inactive };
-  }, [summary, hiddenRepos]);
+  }, [summary, hiddenRepos, searchQuery]);
+
+  // 搜尋有命中「其他 repos」時自動展開該區段；清空搜尋後不強制收回（讓使用者手動控制）
+  useEffect(() => {
+    if (searchQuery.trim() !== '' && withoutRoadmaps.length > 0) {
+      setShowOthers(true);
+    }
+  }, [searchQuery, withoutRoadmaps.length]);
 
   const handleNavClick = () => {
     // 手機版點選後收起；桌機版 onClose 可忽略（state 不受影響）
@@ -85,12 +104,40 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
           總覽
         </NavLink>
 
+        <div className="relative mt-3">
+          <Search
+            size={14}
+            strokeWidth={2}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[--color-text-muted]"
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜尋 repo"
+            aria-label="搜尋 repo"
+            className="w-full rounded-lg border border-[--color-border] bg-white py-1.5 pl-8 pr-7 text-sm text-[--color-text-primary] placeholder:text-[--color-text-muted] focus:border-[--color-brand] focus:outline-none focus:ring-2 focus:ring-[--color-brand-ring]"
+          />
+          {searchQuery !== '' && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              aria-label="清除搜尋"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[--color-text-muted] hover:bg-[--color-surface-overlay] hover:text-[--color-text-secondary]"
+            >
+              <X size={12} strokeWidth={2.25} />
+            </button>
+          )}
+        </div>
+
         <div className="mt-4 mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-[--color-text-muted]">
           Repositories
         </div>
 
         {withRoadmaps.length === 0 && (
-          <div className="px-3 py-2 text-xs text-[--color-text-muted]">尚無資料</div>
+          <div className="px-3 py-2 text-xs text-[--color-text-muted]">
+            {searchQuery.trim() === '' ? '尚無資料' : '找不到符合的 repo'}
+          </div>
         )}
 
         {withRoadmaps.map((repo) => (
