@@ -2,6 +2,7 @@ import { AlertOctagon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import EmptyState from './components/EmptyState';
+import Footer from './components/Footer';
 import LoadingSpinner from './components/LoadingSpinner';
 import RequireAuthGate from './components/RequireAuthGate';
 import Sidebar from './components/Sidebar';
@@ -48,6 +49,8 @@ const AppShell = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [hiddenRepos, setHiddenRepos] = useState<Set<string>>(() => new Set());
   const [nonSubmittableRepos, setNonSubmittableRepos] = useState<Set<string>>(() => new Set());
+  /** 使用者按 TopNav 重新整理按鈕時的旋轉狀態；獨立於初次載入，避免覆蓋既有資料閃白 */
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState<boolean>(false);
   const location = useLocation();
   const session = useSession();
   const sessionStatus = session.state.status;
@@ -61,6 +64,25 @@ const AppShell = () => {
       );
     });
   }, []);
+
+  /**
+   * 手動重新拉取 summary（TopNav 的 RefreshCw 按鈕觸發）。
+   * 不重置 `summary` 為 null，stale-while-revalidate：UI 保留現有資料，
+   * 直到新資料回來，避免使用者看到整頁 loading 閃白。
+   */
+  const refreshSummary = useCallback(async () => {
+    if (sessionStatus !== 'authenticated') return;
+    setIsRefreshingSummary(true);
+    try {
+      const data = await fetchSummary();
+      setSummary(data);
+    } catch (err) {
+      // 不打斷 UI；console.error 留紀錄，避免 prod 上靜默失敗難以查
+      console.error('[AppShell] refreshSummary 失敗：', err);
+    } finally {
+      setIsRefreshingSummary(false);
+    }
+  }, [sessionStatus]);
 
   useEffect(() => {
     // Session 尚在 loading 時不打 summary（避免先打一次 401 再打一次成功 —— 浪費流量且閃 gate）
@@ -130,7 +152,7 @@ const AppShell = () => {
     return (
       <ToastProvider>
         <div className="flex h-full flex-col">
-          <TopNav summary={null} session={session.state} onLogin={session.login} onLogout={session.logout} />
+          <TopNav summary={null} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} />
           <div className="flex flex-1 items-center justify-center bg-[--color-surface] p-6">
             <RequireAuthGate onLogin={session.login} />
           </div>
@@ -143,7 +165,7 @@ const AppShell = () => {
     return (
       <ToastProvider>
         <div className="flex h-full flex-col">
-          <TopNav summary={null} session={session.state} onLogin={session.login} onLogout={session.logout} />
+          <TopNav summary={null} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} />
           <div className="flex flex-1 items-center justify-center bg-[--color-surface] p-6">
             <EmptyState
               icon={AlertOctagon}
@@ -160,7 +182,7 @@ const AppShell = () => {
     return (
       <ToastProvider>
         <div className="flex h-full flex-col">
-          <TopNav summary={null} session={session.state} onLogin={session.login} onLogout={session.logout} />
+          <TopNav summary={null} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} />
           <div className="flex flex-1 items-center justify-center bg-[--color-surface]">
             <LoadingSpinner size="lg" />
           </div>
@@ -174,7 +196,7 @@ const AppShell = () => {
   return (
     <ToastProvider>
       <div className="flex h-full flex-col">
-        <TopNav summary={summary} onMenuClick={openSidebar} session={session.state} onLogin={session.login} onLogout={session.logout} />
+        <TopNav summary={summary} onMenuClick={openSidebar} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} />
         <div className="relative flex flex-1 overflow-hidden">
           <Sidebar summary={summary} hiddenRepos={hiddenRepos} isOpen={isSidebarOpen} onClose={closeSidebar} />
 
@@ -188,10 +210,11 @@ const AppShell = () => {
             />
           )}
 
-          <main className="flex-1 overflow-y-auto bg-[--color-surface]">
-            <div className="p-4 sm:p-6">
+          <main className="flex flex-1 flex-col overflow-y-auto bg-[--color-surface]">
+            <div className="flex-1 p-4 sm:p-6">
               <Outlet context={context} />
             </div>
+            <Footer />
           </main>
         </div>
       </div>

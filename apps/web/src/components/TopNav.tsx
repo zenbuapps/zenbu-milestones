@@ -1,4 +1,4 @@
-import { ExternalLink, LayoutDashboard, Menu } from 'lucide-react';
+import { LayoutDashboard, Menu, RefreshCw } from 'lucide-react';
 import type { Summary } from 'shared';
 import type { SessionState } from '../hooks/useSession';
 import { formatRelative } from '../utils/date';
@@ -13,15 +13,28 @@ type TTopNavProps = {
   session?: SessionState;
   onLogin?: () => void;
   onLogout?: () => void;
+  /** 重新拉取 summary（手動更新按鈕） */
+  onRefresh?: () => void;
+  /** refresh 進行中（按鈕圖示旋轉、disabled） */
+  isRefreshing?: boolean;
 };
-
-const GITHUB_ORG_URL = 'https://github.com/zenbuapps';
 
 /**
  * 頂部導覽列
- * 左側為（手機版）漢堡鈕 + 品牌 logo + 標題，右側顯示資料更新時間 + 登入狀態 + GitHub org 連結
+ * 左側：（手機版）漢堡鈕 + 品牌 logo + 標題
+ * 右側：最後更新時間 + 手動重新整理 icon + UserMenu（含 dropdown）
+ *
+ * GitHub Org 連結已遷移到 Footer（issue #7）。
  */
-const TopNav = ({ summary, onMenuClick, session, onLogin, onLogout }: TTopNavProps) => (
+const TopNav = ({
+  summary,
+  onMenuClick,
+  session,
+  onLogin,
+  onLogout,
+  onRefresh,
+  isRefreshing,
+}: TTopNavProps) => (
   <header className="z-50 flex h-16 flex-shrink-0 items-center justify-between border-b border-[--color-border] bg-white px-3 sm:px-4">
     <div className="flex items-center gap-2 sm:gap-3">
       {onMenuClick && (
@@ -48,16 +61,22 @@ const TopNav = ({ summary, onMenuClick, session, onLogin, onLogout }: TTopNavPro
           最後更新：{formatRelative(summary.generatedAt)}
         </span>
       )}
-      <a
-        href={GITHUB_ORG_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="btn-ghost"
-        aria-label="開啟 GitHub Org"
-      >
-        <ExternalLink size={16} strokeWidth={2} />
-        <span className="hidden md:inline">GitHub</span>
-      </a>
+      {onRefresh && (
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          aria-label="重新整理資料"
+          title="重新整理資料"
+          className="btn-ghost"
+        >
+          <RefreshCw
+            size={16}
+            strokeWidth={2}
+            className={isRefreshing ? 'animate-spin' : ''}
+          />
+        </button>
+      )}
       {session && onLogin && onLogout && (
         <UserMenu state={session} onLogin={onLogin} onLogout={onLogout} />
       )}
