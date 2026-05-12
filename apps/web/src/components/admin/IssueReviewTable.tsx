@@ -265,12 +265,12 @@ const IssueReviewTable = () => {
             <table className="w-full text-sm">
               <thead className="bg-[--color-surface-overlay] text-left text-xs uppercase tracking-wide text-[--color-text-muted]">
                 <tr>
-                  <th className="px-4 py-3 font-medium">作者</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">作者</th>
                   <th className="px-4 py-3 font-medium">標題</th>
-                  <th className="px-4 py-3 font-medium">Repo</th>
-                  <th className="px-4 py-3 font-medium">狀態</th>
-                  <th className="px-4 py-3 font-medium">建立</th>
-                  <th className="px-4 py-3 text-right font-medium">動作</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">Repo</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">狀態</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">建立</th>
+                  <th className="whitespace-nowrap px-4 py-3 text-right font-medium">動作</th>
                 </tr>
               </thead>
               <tbody>
@@ -344,29 +344,30 @@ const IssueRow = ({
 }: TIssueRowProps) => (
   <>
     <tr className="border-t border-[--color-border] hover:bg-[--color-surface-overlay]">
-      <td className="px-4 py-3 align-top">
+      <td className="whitespace-nowrap px-4 py-3 align-top">
         <AuthorCell author={issue.author} />
       </td>
       <td className="px-4 py-3 align-top">
         <button
           type="button"
           onClick={onToggleExpand}
-          className="text-left text-sm font-medium text-[--color-text-primary] hover:text-[--color-brand]"
+          className="block max-w-[28rem] truncate text-left text-sm font-medium text-[--color-text-primary] hover:text-[--color-brand]"
           aria-expanded={expanded}
+          title={issue.title}
         >
           {issue.title}
         </button>
       </td>
-      <td className="px-4 py-3 align-top text-xs">
+      <td className="whitespace-nowrap px-4 py-3 align-top text-xs">
         <RepoLink owner={issue.repoOwner} name={issue.repoName} />
       </td>
-      <td className="px-4 py-3 align-top">
+      <td className="whitespace-nowrap px-4 py-3 align-top">
         <IssueStatusBadge status={issue.status} />
       </td>
-      <td className="px-4 py-3 align-top text-xs text-[--color-text-muted]">
+      <td className="whitespace-nowrap px-4 py-3 align-top text-xs text-[--color-text-muted]">
         <time dateTime={issue.createdAt}>{formatTimeAgo(issue.createdAt)}</time>
       </td>
-      <td className="px-4 py-3 align-top">
+      <td className="whitespace-nowrap px-4 py-3 align-top">
         <div className="flex items-center justify-end gap-1.5">
           <ActionCluster
             issue={issue}

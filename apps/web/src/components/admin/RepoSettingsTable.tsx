@@ -162,9 +162,9 @@ const RepoSettingsTable = () => {
               <thead className="bg-[--color-surface-overlay] text-left text-xs uppercase tracking-wide text-[--color-text-muted]">
                 <tr>
                   <th className="px-4 py-3 font-medium">Repo</th>
-                  <th className="px-4 py-3 font-medium">可投稿</th>
-                  <th className="px-4 py-3 font-medium">顯示於 UI</th>
-                  <th className="px-4 py-3 font-medium">最近更新</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">可投稿</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">顯示於 UI</th>
+                  <th className="whitespace-nowrap px-4 py-3 font-medium">最近更新</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,7 +186,7 @@ const RepoSettingsTable = () => {
                           </a>
                         </div>
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="whitespace-nowrap px-4 py-3 align-top">
                         <ToggleSwitch
                           checked={row.canSubmitIssue}
                           disabled={pending}
@@ -194,7 +194,7 @@ const RepoSettingsTable = () => {
                           onChange={(v) => handleToggle(row, 'canSubmitIssue', v)}
                         />
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="whitespace-nowrap px-4 py-3 align-top">
                         <ToggleSwitch
                           checked={row.visibleOnUI}
                           disabled={pending}
@@ -202,7 +202,7 @@ const RepoSettingsTable = () => {
                           onChange={(v) => handleToggle(row, 'visibleOnUI', v)}
                         />
                       </td>
-                      <td className="px-4 py-3 align-top text-xs text-[--color-text-muted]">
+                      <td className="whitespace-nowrap px-4 py-3 align-top text-xs text-[--color-text-muted]">
                         {row.updatedBy?.displayName ?? '—'}
                         <br />
                         <time dateTime={row.updatedAt}>{formatTimeAgo(row.updatedAt)}</time>

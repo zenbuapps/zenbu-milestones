@@ -233,11 +233,11 @@ const UserList = ({ users, currentUserId, pendingId, onChangeRole }: TUserListPr
       <table className="w-full text-sm">
         <thead className="bg-[--color-surface-overlay] text-left text-xs uppercase tracking-wide text-[--color-text-muted]">
           <tr>
-            <th className="px-4 py-3 font-medium">使用者</th>
+            <th className="whitespace-nowrap px-4 py-3 font-medium">使用者</th>
             <th className="px-4 py-3 font-medium">Email</th>
-            <th className="px-4 py-3 font-medium">Role</th>
-            <th className="px-4 py-3 font-medium">建立時間</th>
-            <th className="px-4 py-3 text-right font-medium">動作</th>
+            <th className="whitespace-nowrap px-4 py-3 font-medium">Role</th>
+            <th className="whitespace-nowrap px-4 py-3 font-medium">建立時間</th>
+            <th className="whitespace-nowrap px-4 py-3 text-right font-medium">動作</th>
           </tr>
         </thead>
         <tbody>
@@ -246,7 +246,7 @@ const UserList = ({ users, currentUserId, pendingId, onChangeRole }: TUserListPr
               key={u.id}
               className="border-t border-[--color-border] hover:bg-[--color-surface-overlay]"
             >
-              <td className="px-4 py-3 align-top">
+              <td className="whitespace-nowrap px-4 py-3 align-top">
                 <div className="flex items-center gap-2">
                   {u.avatarUrl ? (
                     <img
@@ -271,13 +271,13 @@ const UserList = ({ users, currentUserId, pendingId, onChangeRole }: TUserListPr
                 </div>
               </td>
               <td className="px-4 py-3 align-top text-xs text-[--color-text-muted]">{u.email}</td>
-              <td className="px-4 py-3 align-top">
+              <td className="whitespace-nowrap px-4 py-3 align-top">
                 <RoleBadge role={u.role} />
               </td>
-              <td className="px-4 py-3 align-top text-xs text-[--color-text-muted]">
+              <td className="whitespace-nowrap px-4 py-3 align-top text-xs text-[--color-text-muted]">
                 {formatDate(u.createdAt)}
               </td>
-              <td className="px-4 py-3 align-top">
+              <td className="whitespace-nowrap px-4 py-3 align-top">
                 <div className="flex items-center justify-end">
                   <RoleToggle
                     user={u}
