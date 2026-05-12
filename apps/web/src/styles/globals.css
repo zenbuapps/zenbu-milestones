@@ -120,3 +120,86 @@ body {
 .w-md-editor-toolbar > ul:nth-child(2) {
   display: none !important;
 }
+
+/* ============================================================================
+ * MarkdownPreview 元件樣式覆寫
+ * ----------------------------------------------------------------------------
+ * @uiw/react-md-editor 的 MDEditor.Markdown 預設帶白底 + 完整 GitHub-style
+ * 排版。我們在 admin BodyPreview / RepoIssueList IssueBody 等「小型嵌入式
+ * 預覽」場景需要它跟父容器（卡片 / surface 色）融合，所以做幾項覆寫：
+ *
+ *   - 背景透明
+ *   - 字級收斂到 13px，配合 text-xs 文案
+ *   - 標題尺度縮減（避免 h1 把列高撐爆）
+ *   - 段落間距收斂
+ *   - 內嵌 code / pre 保留可讀性，但不要太搶眼
+ * ============================================================================ */
+.markdown-preview-wrap .wmde-markdown,
+.markdown-preview-wrap .wmde-markdown-color {
+  background-color: transparent !important;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.markdown-preview-wrap .wmde-markdown h1 {
+  font-size: 1.15rem;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin: 0.4em 0 0.3em;
+}
+.markdown-preview-wrap .wmde-markdown h2 {
+  font-size: 1.05rem;
+  border-bottom: none;
+  padding-bottom: 0;
+  margin: 0.4em 0 0.3em;
+}
+.markdown-preview-wrap .wmde-markdown h3,
+.markdown-preview-wrap .wmde-markdown h4,
+.markdown-preview-wrap .wmde-markdown h5,
+.markdown-preview-wrap .wmde-markdown h6 {
+  font-size: 0.95rem;
+  margin: 0.4em 0 0.3em;
+}
+.markdown-preview-wrap .wmde-markdown p {
+  margin: 0.35em 0;
+}
+.markdown-preview-wrap .wmde-markdown ul,
+.markdown-preview-wrap .wmde-markdown ol {
+  margin: 0.35em 0;
+  padding-left: 1.4em;
+}
+.markdown-preview-wrap .wmde-markdown code {
+  background-color: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.92em;
+}
+.markdown-preview-wrap .wmde-markdown pre {
+  background-color: var(--color-surface-overlay);
+  border-radius: 6px;
+  padding: 0.6em 0.8em;
+  font-size: 0.92em;
+}
+.markdown-preview-wrap .wmde-markdown pre code {
+  background-color: transparent;
+  padding: 0;
+}
+.markdown-preview-wrap .wmde-markdown blockquote {
+  border-left: 3px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0.2em 0.8em;
+  margin: 0.4em 0;
+}
+.markdown-preview-wrap .wmde-markdown a {
+  color: var(--color-brand);
+}
+.markdown-preview-wrap .wmde-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.markdown-preview-wrap .wmde-markdown table {
+  font-size: 12px;
+}

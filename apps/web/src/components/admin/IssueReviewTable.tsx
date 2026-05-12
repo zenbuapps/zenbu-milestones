@@ -46,6 +46,7 @@ import { formatTimeAgo } from '../../utils/date';
 import EmptyState from '../EmptyState';
 import IssueStatusBadge from '../IssueStatusBadge';
 import LoadingSpinner from '../LoadingSpinner';
+import MarkdownPreview from '../MarkdownPreview';
 import { useToast } from '../Toast/useToast';
 import RejectReasonDialog from './RejectReasonDialog';
 
@@ -470,7 +471,11 @@ const BodyPreview = ({ issue }: { issue: AdminIssueRow }) => (
       <FileText size={12} strokeWidth={2.25} />
       <span className="font-medium">預覽（前 200 字）</span>
     </div>
-    <p className="whitespace-pre-wrap break-words">{issue.bodyPreview || '（無內容）'}</p>
+    {issue.bodyPreview ? (
+      <MarkdownPreview source={issue.bodyPreview} />
+    ) : (
+      <p className="italic text-[--color-text-muted]">（無內容）</p>
+    )}
     {issue.status === 'rejected' && issue.rejectReason && (
       <div className="mt-1 rounded-md bg-red-50 p-2 text-xs text-red-700">
         <span className="font-semibold">拒絕原因：</span>

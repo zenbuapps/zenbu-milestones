@@ -14,6 +14,7 @@ import IssueFilterBar, {
   textColorForBg,
   type TFilterQuery,
 } from './IssueFilterBar';
+import MarkdownPreview from './MarkdownPreview';
 
 type TRepoIssueListProps = {
   /** 當前 repo 的完整 detail；`allIssues` 即為本元件的資料來源 */
@@ -340,14 +341,14 @@ type TIssueBodyProps = {
 const IssueBody = ({ body, expanded, onToggle }: TIssueBodyProps) => {
   if (body === null) return null;
   const isTruncatable = body.length > BODY_PREVIEW_LIMIT;
+  // 截斷時直接從原始 markdown 切（可能切到語法中段，但 markdown 渲染器對殘缺
+  // 語法夠 forgiving；多餘的 ... 由我們補在後面提示）
   const display = !expanded && isTruncatable
     ? body.slice(0, BODY_PREVIEW_LIMIT).trimEnd() + '…'
     : body;
   return (
     <div className="mt-2 rounded-md bg-[--color-surface] px-3 py-2 text-xs text-[--color-text-secondary]">
-      <pre className="whitespace-pre-wrap break-words font-sans leading-relaxed">
-        {display}
-      </pre>
+      <MarkdownPreview source={display} />
       {isTruncatable && (
         <button
           type="button"
