@@ -234,7 +234,7 @@ const RoadmapPage = () => {
         <RoadmapTimeline roadmaps={detail.roadmaps} />
       )}
 
-      {detail.allIssues.length > 0 && <RepoIssueList detail={detail} />}
+      <RepoIssueList detail={detail} />
 
       {/* Issue 提交對話框：只在有 repo name 且已登入時 mount，避免干擾 hook 順序 */}
       {canSubmitIssue && name && (

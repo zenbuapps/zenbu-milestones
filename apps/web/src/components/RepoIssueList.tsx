@@ -174,6 +174,9 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
 
   const clearAll = (): void => setQuery(DEFAULT_QUERY);
 
+  /** 整個 repo 沒有任何 issue 與套 filter 後為 0 是兩個不同情境，要給不同 EmptyState */
+  const hasNoIssuesAtAll = detail.allIssues.length === 0;
+
   return (
     <section aria-label="全部 Issues" className="mt-8">
       <header className="mb-4 flex items-baseline justify-between gap-2">
@@ -185,45 +188,55 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
         </span>
       </header>
 
-      <IssueFilterBar
-        availableLabels={availableLabels}
-        availableAssignees={availableAssignees}
-        availableRoadmaps={availableRoadmaps}
-        counts={counts}
-        query={query}
-        onChange={setQuery}
-      />
-
-      {filtered.length === 0 ? (
+      {hasNoIssuesAtAll ? (
         <EmptyState
           icon={Inbox}
-          title="無符合條件的 Issue"
-          description="試著放寬搜尋條件或清除所有濾條。"
-          action={
-            <button type="button" onClick={clearAll} className="btn-secondary">
-              清除所有濾條
-            </button>
-          }
+          title="此 repo 尚無任何 Issue"
+          description="當有人在 GitHub 上對此 repo 開 issue 後，會自動出現在這裡。"
         />
       ) : (
-        <ul className="divide-y divide-[--color-border] overflow-hidden rounded-xl border border-[--color-border] bg-white">
-          {filtered.map((issue) => {
-            const linkedRoadmap = issueToRoadmap.get(issue.number);
-            const linkedTitle =
-              linkedRoadmap !== undefined
-                ? roadmapTitleByNumber.get(linkedRoadmap) ?? null
-                : null;
-            return (
-              <IssueRow
-                key={issue.number}
-                issue={issue}
-                keyword={query.keyword}
-                roadmapNumber={linkedRoadmap ?? null}
-                roadmapTitle={linkedTitle}
-              />
-            );
-          })}
-        </ul>
+        <>
+          <IssueFilterBar
+            availableLabels={availableLabels}
+            availableAssignees={availableAssignees}
+            availableRoadmaps={availableRoadmaps}
+            counts={counts}
+            query={query}
+            onChange={setQuery}
+          />
+
+          {filtered.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title="無符合條件的 Issue"
+              description="試著放寬搜尋條件或清除所有濾條。"
+              action={
+                <button type="button" onClick={clearAll} className="btn-secondary">
+                  清除所有濾條
+                </button>
+              }
+            />
+          ) : (
+            <ul className="divide-y divide-[--color-border] overflow-hidden rounded-xl border border-[--color-border] bg-white">
+              {filtered.map((issue) => {
+                const linkedRoadmap = issueToRoadmap.get(issue.number);
+                const linkedTitle =
+                  linkedRoadmap !== undefined
+                    ? roadmapTitleByNumber.get(linkedRoadmap) ?? null
+                    : null;
+                return (
+                  <IssueRow
+                    key={issue.number}
+                    issue={issue}
+                    keyword={query.keyword}
+                    roadmapNumber={linkedRoadmap ?? null}
+                    roadmapTitle={linkedTitle}
+                  />
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
     </section>
   );

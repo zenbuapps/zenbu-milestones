@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, LayoutDashboard, Lock, X } from 'lucide-react';
+import { ChevronRight, LayoutDashboard, Lock, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import type { RepoSummary, Summary } from 'shared';
@@ -134,31 +134,34 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
             />
           </button>
           {showOthers && (
-            <ul className="mt-1 flex flex-col gap-0.5">
+            <ul className="mt-1 flex flex-col gap-1">
               {withoutRoadmaps.map((repo) => (
                 <li key={repo.name}>
-                  <a
-                    href={repo.htmlUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-[--color-text-secondary] transition-colors hover:bg-[--color-surface-overlay]"
+                  <NavLink
+                    to={`/repo/${repo.name}`}
+                    onClick={handleNavClick}
+                    className={({ isActive }) =>
+                      `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-[--color-primary-50] font-semibold text-[--color-brand]'
+                          : 'text-[--color-text-secondary] hover:bg-[--color-surface-overlay]'
+                      }`
+                    }
                   >
                     <span className="flex min-w-0 items-center gap-1.5">
                       {repo.isPrivate && (
                         <Lock
-                          size={10}
+                          size={12}
                           strokeWidth={2}
                           className="flex-shrink-0 text-[--color-text-muted]"
                         />
                       )}
                       <span className="truncate">{repo.name}</span>
                     </span>
-                    <ExternalLink
-                      size={12}
-                      strokeWidth={2}
-                      className="flex-shrink-0 text-[--color-text-muted]"
-                    />
-                  </a>
+                    <span className="flex-shrink-0 rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
+                      {repo.roadmapCount}
+                    </span>
+                  </NavLink>
                 </li>
               ))}
             </ul>
