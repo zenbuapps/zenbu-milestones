@@ -64,6 +64,8 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
     }
   }, [searchQuery, withoutRoadmaps.length]);
 
+  const isSearching = searchQuery.trim() !== '';
+
   const handleNavClick = () => {
     // 手機版點選後收起；桌機版 onClose 可忽略（state 不受影響）
     onClose?.();
@@ -164,13 +166,63 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
             </span>
           </NavLink>
         ))}
+
+        {/*
+         * 搜尋進行中 + 「其他 repos」有命中 → 把該區段內嵌在 Repositories 後面、強制
+         * 展開，避免使用者要捲到 sidebar 底部才看得到匹配結果（issue #4）。
+         * 非搜尋時則維持原本 mt-auto 底端的 collapse 行為。
+         */}
+        {isSearching && withoutRoadmaps.length > 0 && (
+          <>
+            <div className="mt-4 mb-2 flex items-baseline justify-between px-3">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-[--color-text-muted]">
+                其他 repos
+              </span>
+              <span className="text-[10px] font-medium text-[--color-text-muted]">
+                找到 {withoutRoadmaps.length} 個
+              </span>
+            </div>
+            {withoutRoadmaps.map((repo) => (
+              <NavLink
+                key={`search-${repo.name}`}
+                to={`/repo/${repo.name}`}
+                onClick={handleNavClick}
+                className={({ isActive }) =>
+                  `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-[--color-primary-50] font-semibold text-[--color-brand]'
+                      : 'text-[--color-text-secondary] hover:bg-[--color-surface-overlay]'
+                  }`
+                }
+              >
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {repo.isPrivate && (
+                    <Lock
+                      size={12}
+                      strokeWidth={2}
+                      className="flex-shrink-0 text-[--color-text-muted]"
+                    />
+                  )}
+                  <span className="truncate">{repo.name}</span>
+                </span>
+                <span className="flex-shrink-0 rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
+                  {repo.roadmapCount}
+                </span>
+              </NavLink>
+            ))}
+          </>
+        )}
       </nav>
 
-      {withoutRoadmaps.length > 0 && (
+      {/*
+       * 非搜尋狀態的「其他 repos」收合區：維持原本 mt-auto 卡底端 + chevron 可收合
+       */}
+      {!isSearching && withoutRoadmaps.length > 0 && (
         <div className="mt-auto border-t border-[--color-border] px-3 py-3">
           <button
             type="button"
             onClick={() => setShowOthers((v) => !v)}
+            aria-expanded={showOthers}
             className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium text-[--color-text-muted] transition-colors hover:bg-[--color-surface-overlay]"
           >
             <span>其他 repos（無 roadmap）</span>
