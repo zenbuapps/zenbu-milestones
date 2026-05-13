@@ -1,5 +1,7 @@
 import {
   AlertOctagon,
+  ChevronDown,
+  ChevronUp,
   ExternalLink,
   FileText,
   Loader2,
@@ -14,6 +16,7 @@ import type { TAppShellContext } from '../AppShell';
 import EmptyState from '../components/EmptyState';
 import IssueStatusBadge from '../components/IssueStatusBadge';
 import LoadingSpinner from '../components/LoadingSpinner';
+import MarkdownPreview from '../components/MarkdownPreview';
 import PageHeader from '../components/PageHeader';
 import { useToast } from '../components/Toast/useToast';
 import { ApiError, fetchMyIssues, withdrawMyIssue } from '../data/api';
@@ -257,10 +260,13 @@ type TIssueRowProps = {
  * - 已同步 GitHub：顯示 GitHub URL 外連
  * - 已拒絕：顯示拒絕原因（rejectReason）
  * - status === 'pending'：右側額外顯示「撤銷」按鈕（issue #6）
+ * - bodyMarkdown 非空：可點「展開內容」展開 markdown 預覽（issue #13）
  */
 const IssueRow = ({ issue, onWithdraw, isWithdrawing, disableWithdraw }: TIssueRowProps) => {
   const repoSlug = `${issue.repoOwner}/${issue.repoName}`;
   const repoHashLink = `/repo/${issue.repoName}`;
+  const hasBody = issue.bodyMarkdown.trim() !== '';
+  const [bodyExpanded, setBodyExpanded] = useState(false);
   return (
     <li className="card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -323,6 +329,37 @@ const IssueRow = ({ issue, onWithdraw, isWithdrawing, disableWithdraw }: TIssueR
           )}
         </div>
       </div>
+
+      {hasBody && (
+        <div className="mt-3">
+          {bodyExpanded && (
+            <div className="rounded-md bg-[--color-surface] px-3 py-2 text-xs text-[--color-text-secondary]">
+              <MarkdownPreview source={issue.bodyMarkdown} />
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setBodyExpanded((v) => !v)}
+            className={
+              'inline-flex items-center gap-1 text-[11px] font-medium text-[--color-brand] hover:underline ' +
+              (bodyExpanded ? 'mt-1.5' : '')
+            }
+            aria-expanded={bodyExpanded}
+          >
+            {bodyExpanded ? (
+              <>
+                <ChevronUp size={12} strokeWidth={2.25} />
+                收合內容
+              </>
+            ) : (
+              <>
+                <ChevronDown size={12} strokeWidth={2.25} />
+                展開內容
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </li>
   );
 };
