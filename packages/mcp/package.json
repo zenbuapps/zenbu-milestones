@@ -1,0 +1,33 @@
+{
+  "name": "@zenbuapps/zenbu-roadmaps-mcp",
+  "private": true,
+  "version": "0.1.0",
+  "description": "MCP server exposing zenbu-roadmaps tools (submit issue / review issue) to local Claude Code",
+  "type": "module",
+  "bin": {
+    "zenbu-roadmaps-mcp": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
