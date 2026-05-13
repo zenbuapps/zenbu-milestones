@@ -250,11 +250,8 @@ type TIssueRowProps = {
   roadmapTitle: string | null;
 };
 
-/** Issue body 預覽截斷字數；超過則收合並提供展開按鈕 */
-const BODY_PREVIEW_LIMIT = 240;
-
 /**
- * 單列 issue：state icon + 標題（外連 GitHub）+ meta 列 + body 預覽
+ * 單列 issue：state icon + 標題（外連 GitHub）+ meta 列 + 可展開的 body
  */
 const IssueRow = ({ issue, keyword, roadmapNumber, roadmapTitle }: TIssueRowProps) => {
   const [bodyExpanded, setBodyExpanded] = useState(false);
@@ -333,42 +330,40 @@ type TIssueBodyProps = {
 };
 
 /**
- * Issue body 顯示區：保留換行的純文字呈現，超過 BODY_PREVIEW_LIMIT 時截斷並提供展開
- * - body 為 null：不渲染
- * - body 短於 limit：直接顯示，無切換按鈕
- * - body 長於 limit：預設截斷顯示「...」，展開後顯示完整內容並切換為「收合」
+ * Issue body 顯示區：完全不做預覽，預設收合（隱藏 body）
+ * - body 為 null 或全空白：不渲染（連 toggle 也沒有）
+ * - body 有內容：預設只顯示「展開內容」按鈕；展開後才渲染 markdown 並切為「收合內容」
  */
 const IssueBody = ({ body, expanded, onToggle }: TIssueBodyProps) => {
-  if (body === null) return null;
-  const isTruncatable = body.length > BODY_PREVIEW_LIMIT;
-  // 截斷時直接從原始 markdown 切（可能切到語法中段，但 markdown 渲染器對殘缺
-  // 語法夠 forgiving；多餘的 ... 由我們補在後面提示）
-  const display = !expanded && isTruncatable
-    ? body.slice(0, BODY_PREVIEW_LIMIT).trimEnd() + '…'
-    : body;
+  if (body === null || body.trim() === '') return null;
   return (
-    <div className="mt-2 rounded-md bg-[--color-surface] px-3 py-2 text-xs text-[--color-text-secondary]">
-      <MarkdownPreview source={display} />
-      {isTruncatable && (
-        <button
-          type="button"
-          onClick={onToggle}
-          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[--color-brand] hover:underline"
-          aria-expanded={expanded}
-        >
-          {expanded ? (
-            <>
-              <ChevronUp size={12} strokeWidth={2.25} />
-              收合
-            </>
-          ) : (
-            <>
-              <ChevronDown size={12} strokeWidth={2.25} />
-              展開
-            </>
-          )}
-        </button>
+    <div className="mt-2">
+      {expanded && (
+        <div className="rounded-md bg-[--color-surface] px-3 py-2 text-xs text-[--color-text-secondary]">
+          <MarkdownPreview source={body} />
+        </div>
       )}
+      <button
+        type="button"
+        onClick={onToggle}
+        className={
+          'inline-flex items-center gap-1 text-[11px] font-medium text-[--color-brand] hover:underline ' +
+          (expanded ? 'mt-1.5' : '')
+        }
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <>
+            <ChevronUp size={12} strokeWidth={2.25} />
+            收合內容
+          </>
+        ) : (
+          <>
+            <ChevronDown size={12} strokeWidth={2.25} />
+            展開內容
+          </>
+        )}
+      </button>
     </div>
   );
 };
