@@ -160,8 +160,113 @@ A：後端對 GitHub 資料設有 5 分鐘 in-memory cache。需要立即同步�
 
 ---
 
+## 透過 MCP / Claude Code 操作
+
+如果你習慣在終端機用 [Claude Code](https://claude.com/claude-code) 工作，可直接安裝官方提供的 MCP server `@zenbuapps/zenbu-roadmaps-mcp`，**不必離開命令列就能提 issue、查狀態、（管理員）審核投稿**。底層走 zenbu-roadmaps 後端既有 API，session cookie 直送，0 後端設定。
+
+### 1. 取得 session cookie
+
+MCP server 走 session cookie 直接認證，需要先從瀏覽器取得當前登入的 cookie：
+
+1. 用瀏覽器登入 `https://roadmaps.zenbuapps.com`（或本地開發環境）
+2. 開 DevTools → Application → Cookies → 找 `connect.sid`
+3. 複製 Cookie Value（會以 `s%3A` 開頭，後接很長一段 URL-encoded 字串）
+
+Cookie 預設 7 天到期；過期後 MCP 呼叫會收到 401，再登入並複製一次即可。
+
+### 2. 設定 Claude Code MCP
+
+編輯 Claude Code 的 MCP config（macOS：`~/Library/Application Support/Claude/claude_desktop_config.json`，Linux：`~/.config/Claude/claude_desktop_config.json`），加入：
+
+```json
+{
+  "mcpServers": {
+    "zenbu-roadmaps": {
+      "command": "npx",
+      "args": ["-y", "@zenbuapps/zenbu-roadmaps-mcp"],
+      "env": {
+        "ZENBU_ROADMAPS_API_URL": "https://roadmaps.zenbuapps.com",
+        "ZENBU_ROADMAPS_SESSION": "s%3A...複製的 cookie 值..."
+      }
+    }
+  }
+}
+```
+
+> 本地開發：把 `ZENBU_ROADMAPS_API_URL` 改成 `http://localhost:3000`（需要先 `pnpm dev:api` 起後端），並用本地登入後的 cookie。
+
+重啟 Claude Code，在 MCP 列表會看到 `zenbu-roadmaps` 連同 6 個工具：
+
+| 工具 | 對應動作 | 權限 |
+|---|---|---|
+| `submit_issue` | 提出新 issue 草稿 | 登入即可 |
+| `list_my_issues` | 列出我自己提過的 issue | 登入即可 |
+| `withdraw_my_issue` | 撤銷自己的 pending issue | 登入即可（限自己且 pending） |
+| `list_admin_issues` | 列出待審核 / 全部投稿 | role=admin |
+| `approve_issue` | 通過投稿（自動轉送 GitHub） | role=admin |
+| `reject_issue` | 拒絕投稿並填寫理由 | role=admin |
+
+### 3. 一般使用者範例（Claude Code 自然語言）
+
+在 Claude Code 提示框直接用中文/英文敘述需求，Claude 會自動挑選 MCP 工具：
+
+**提一個新 issue**
+
+```
+幫我對 zenbu-cms 提一個 issue：
+標題：登入按鈕在 Safari 17 點不下去
+內容：在 Safari 17.4 (macOS 14.5) 上，登入頁面按下「使用 Google 登入」沒有反應，console 也沒任何 error。Chrome / Firefox 正常。
+```
+
+**查我自己提過的 issue**
+
+```
+幫我列出我在 zenbu-roadmaps 上提過的所有 issue，重點看待審核的那幾筆。
+```
+
+**撤銷某筆 pending issue**
+
+```
+幫我撤銷我那筆「登入按鈕在 Safari 17 點不下去」的 issue（id 是 xxx）。
+```
+
+撤銷只能對自己提交且狀態為 `pending` 的 issue；已通過、已拒絕、已轉送 GitHub 的不可撤銷。
+
+### 4. Admin 範例（Claude Code 自然語言）
+
+**列出所有待審核投稿**
+
+```
+列出 zenbu-roadmaps 上目前所有待審核的 issue，依時間排序，附上作者 email 與 body 預覽。
+```
+
+**通過某筆投稿**
+
+```
+幫我審核通過 id 為 xxx 的 issue，把它轉送到 GitHub。
+```
+
+通過會立即呼叫 GitHub API 建立 issue 並把 `githubIssueNumber` 回填。若 GitHub 端暫時失敗（PAT 過期、rate limit），狀態會停在「已通過（未同步）」、audit log 記下錯誤，admin 可再重試。
+
+**拒絕某筆投稿並回覆理由**
+
+```
+幫我拒絕 id 為 xxx 的 issue，理由：這個問題已經在 #123 追蹤，請改去那邊補充重現步驟。
+```
+
+拒絕理由會回寫到投稿者的「我的 Issue」頁面，使用者可看到 admin 給的回覆。
+
+### 5. 進一步資訊
+
+- 完整參數說明、錯誤處理、開發者本機跑 MCP 的步驟：[`packages/mcp/README.md`](./packages/mcp/README.md)
+- 後端 API 契約：[`packages/shared/src/index.ts`](./packages/shared/src/index.ts) 的 `API_PATHS` / `SubmittedIssueDTO` / `AdminIssueRow`
+- 若要改 MCP server 或新增工具：先讀 [CONTRIBUTE.md](./CONTRIBUTE.md) 的 workspace 章節
+
+---
+
 ## 想了解更多
 
 - **開發者**：請看 [CONTRIBUTE.md](./CONTRIBUTE.md)（技術堆疊、本地開發、架構說明、部署指引）
+- **MCP / Claude Code 整合**：請看 [`packages/mcp/README.md`](./packages/mcp/README.md)（工具參數、錯誤處理、開發指引）
 - **專案規範**：[`specs/`](./specs)（資料管線 / 資訊架構 / 投稿流程的穩定契約）
 - **AI 協作規範**：[`.claude/CLAUDE.md`](./.claude/CLAUDE.md)（給 Claude Code 與其他 AI 的專案指引）
