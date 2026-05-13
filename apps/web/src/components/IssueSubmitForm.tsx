@@ -268,8 +268,9 @@ const IssueSubmitForm = ({
           // M3 才會實作 /me/issues；此處先放連結，未建成前點擊會 404 回主頁
           linkUrl: '/#/me/issues',
         });
-        // 2s 後關閉 dialog（由父層實作 onSuccess）
-        window.setTimeout(onSuccess, 2000);
+        // 同步關閉 dialog —— Toast 出現的同時 modal 也要關（issue #12）。
+        // Toast 本身有自帶 timeout，足以提供成功回饋
+        onSuccess();
       } catch (err) {
         setState({ status: 'error', error: deriveFormError(err) });
       }
