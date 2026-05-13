@@ -1,4 +1,5 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
+import type { UserRole as PrismaUserRole } from '@prisma/client';
 import type { Request } from 'express';
 import type { SubmittedIssueDTO } from 'shared';
 import { AuthenticatedGuard } from '../common/guards/authenticated.guard';
@@ -8,9 +9,11 @@ import { IssuesService } from './issues.service';
 /**
  * Passport 在 session 反序列化後把 user 寫到 req.user。
  * 此型別只列出這層 controller 需要的最小欄位；完整的 User model 留在 DB。
+ * role 用於判斷 admin 自助通過（issue #15）。
  */
 interface AuthedUser {
   id: string;
+  role: PrismaUserRole;
 }
 
 interface AuthedRequest extends Request {
@@ -45,7 +48,10 @@ export class IssuesController {
     @Req() req: AuthedRequest,
     @Body() dto: CreateIssueDto,
   ): Promise<ApiSuccess<SubmittedIssueDTO>> {
-    const data = await this.issuesService.createDraft(req.user.id, dto);
+    const data = await this.issuesService.createDraft(
+      { id: req.user.id, role: req.user.role },
+      dto,
+    );
     return { success: true, data };
   }
 }

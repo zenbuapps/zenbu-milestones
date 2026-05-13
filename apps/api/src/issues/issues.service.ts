@@ -9,6 +9,7 @@ import {
   IssueStatus as PrismaIssueStatus,
   type Issue,
   type User,
+  type UserRole as PrismaUserRole,
 } from '@prisma/client';
 import type { AdminIssueRow, IssueStatus, SubmittedIssueDTO } from 'shared';
 import { AuditService } from '../admin/audit.service';
@@ -83,16 +84,27 @@ export class IssuesService {
   ) {}
 
   /**
-   * 建立一筆 pending 狀態的 issue。
+   * 建立一筆 issue。
    *
    * 安全：呼叫端須為已登入 user（AuthenticatedGuard 保護），
    * 這裡再查 repo_settings.canSubmitIssue —— 防止有人繞前端 UI
    * 對管理員關閉投稿的 repo 寫入 issue。
    * 若 repo 尚未在 repo_settings 表（例：新 repo，fetcher 下一輪才會 upsert），
    * 預設允許投稿（canSubmitIssue 欄位預設 true，且 fetcher 會追上）。
+   *
+   * 角色行為（issue #15）：
+   *   - 一般使用者：建立後 status=pending，等待 admin 審核。
+   *   - admin：建立後立即內部呼叫 approveAndSync(self) 自助通過，
+   *     回傳的 SubmittedIssueDTO.status 會是 'synced-to-github'（GitHub
+   *     建立成功）或 'approved'（GitHub 暫時失敗，但 DB 已推進）。
+   *     reviewedById 紀錄為自己；audit log 留 'issue.approve' 事件，
+   *     維持與一般通過流程一致的可追溯性。
    */
   // TODO(M1-extension): rate limit 3/min/user（先走 count(createdAt >= now-60s)）
-  async createDraft(authorId: string, dto: CreateIssueDto): Promise<SubmittedIssueDTO> {
+  async createDraft(
+    author: { id: string; role: PrismaUserRole },
+    dto: CreateIssueDto,
+  ): Promise<SubmittedIssueDTO> {
     const settings = await this.prisma.repoSettings.findUnique({
       where: {
         repoOwner_repoName: { repoOwner: dto.repoOwner, repoName: dto.repoName },
@@ -107,7 +119,7 @@ export class IssuesService {
 
     const issue = await this.prisma.issue.create({
       data: {
-        authorId,
+        authorId: author.id,
         repoOwner: dto.repoOwner,
         repoName: dto.repoName,
         title: dto.title,
@@ -115,6 +127,16 @@ export class IssuesService {
         status: 'pending',
       },
     });
+
+    // Admin 自助通過：把剛建好的 pending 投稿直接走 approve flow（issue #15）。
+    // approveAndSync 內部會把 status 推進到 synced_to_github 或 approved、
+    // 寫入 reviewedById/reviewedAt、留 audit log，與一般通過流程一致。
+    if (author.role === 'admin') {
+      await this.approveAndSync(issue.id, author.id);
+      const fresh = await this.prisma.issue.findUnique({ where: { id: issue.id } });
+      if (fresh) return this.toDto(fresh);
+    }
+
     return this.toDto(issue);
   }
 

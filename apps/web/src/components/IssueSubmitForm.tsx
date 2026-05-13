@@ -254,16 +254,25 @@ const IssueSubmitForm = ({
 
       setState({ status: 'submitting' });
       try {
-        await createIssue({
+        const created = await createIssue({
           title: title.trim(),
           body,
           repoOwner,
           repoName,
         });
         setState({ status: 'success' });
+        // admin 角色（issue #15）：後端會在 createDraft 內自動 approve →
+        // 回傳的 status 不是 pending。依實際狀態調整提示，使用者才知道
+        // 不必再去等審核。
+        const toastMessage =
+          created.status === 'synced-to-github'
+            ? '已自動通過審核並建立 GitHub Issue'
+            : created.status === 'approved'
+              ? '已自動通過審核（GitHub 轉送暫時失敗，可在「我的 Issue」重試）'
+              : '草稿已送出，待管理員審核';
         showToast({
           type: 'success',
-          message: '草稿已送出，待管理員審核',
+          message: toastMessage,
           linkText: '查看我的 issue',
           // M3 才會實作 /me/issues；此處先放連結，未建成前點擊會 404 回主頁
           linkUrl: '/#/me/issues',
