@@ -179,7 +179,9 @@ export interface Totals {
   openRoadmaps: number;
   closedRoadmaps: number;
   overdueRoadmaps: number;
+  /** issue #16：全 GitHub issue 計數（不限掛 milestone 的），sum of repos[].openIssues */
   openIssues: number;
+  /** issue #16：全 GitHub issue 計數（不限掛 milestone 的），sum of repos[].closedIssues */
   closedIssues: number;
 }
 
@@ -199,7 +201,9 @@ export interface RepoSummary {
   overdueCount: number;
   /** 0–1；若 roadmapCount === 0 回傳 0（不是 null）*/
   completionRate: number;
+  /** issue #16：該 repo 的全部 open issues（不限掛 milestone）；排除 PR */
   openIssues: number;
+  /** issue #16：該 repo 的全部 closed issues（不限掛 milestone）；排除 PR */
   closedIssues: number;
   /** null 代表沒有「未來到期」的 roadmap */
   nextDueRoadmap: NextDueRoadmap | null;
@@ -338,6 +342,17 @@ export interface RoadmapIssuesPage {
   hasMore: boolean;
 }
 
+/**
+ * 個人化釘選清單單筆（issue #16）。
+ * Sidebar 預設只顯示自己釘選的 repo；user 自己 CRUD，不跨人共享。
+ */
+export interface PinnedRepoDTO {
+  repoOwner: string;
+  repoName: string;
+  /** ISO 8601 */
+  createdAt: string;
+}
+
 /** Phase 2 新 endpoints 統一的路徑常數（前後端共用，避免打錯字） */
 export const API_PATHS = {
   summary: '/api/summary',
@@ -347,4 +362,8 @@ export const API_PATHS = {
     `/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/roadmaps/${roadmapNumber}/issues`,
   adminRefresh: '/api/admin/refresh-data',
   githubHealth: '/api/health/github',
+  /** issue #16：當前使用者的釘選清單 */
+  myPinnedRepos: '/api/me/pinned-repos',
+  myPinnedRepo: (owner: string, name: string) =>
+    `/api/me/pinned-repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`,
 } as const;

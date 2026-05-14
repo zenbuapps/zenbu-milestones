@@ -8,9 +8,19 @@ import RequireAuthGate from './components/RequireAuthGate';
 import Sidebar from './components/Sidebar';
 import ToastProvider from './components/Toast/ToastProvider';
 import TopNav from './components/TopNav';
-import { ApiError, fetchPublicRepoSettings, fetchSummary } from './data/api';
+import {
+  ApiError,
+  fetchMyPinnedRepos,
+  fetchPublicRepoSettings,
+  fetchSummary,
+  pinRepo as apiPinRepo,
+  unpinRepo as apiUnpinRepo,
+} from './data/api';
 import type { Summary } from 'shared';
 import { useSession, type UseSessionResult } from './hooks/useSession';
+
+/** 將 owner/name 組合成 sidebar 與 lookup 用的 unique key（與 PinnedRepoDTO 一致）*/
+const pinKey = (owner: string, name: string): string => `${owner}/${name}`;
 
 /**
  * 路由 outlet 向下共享的 context 形狀
@@ -35,6 +45,17 @@ export type TAppShellContext = {
    * 可讓 Sidebar / OverviewPage / RoadmapPage 立即反映，不必 F5。
    */
   refreshRepoSettings: () => void;
+  /**
+   * 個人化釘選清單（issue #16）。key 為 `${owner}/${name}`；
+   * - empty 代表使用者尚未釘任何 repo（Sidebar 顯示提示）
+   * - 後端未部署 / 無 session 時為空 set（fall back 行為由消費端決定）
+   */
+  pinnedRepos: Set<string>;
+  /**
+   * 樂觀切換釘選狀態：先動本地 set 立即反映 UI，再呼叫後端；
+   * 失敗時自動 revert。回傳 promise 讓呼叫端可顯示 spinner / error toast。
+   */
+  togglePinnedRepo: (repoOwner: string, repoName: string) => Promise<void>;
 };
 
 /**
@@ -49,6 +70,8 @@ const AppShell = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
   const [hiddenRepos, setHiddenRepos] = useState<Set<string>>(() => new Set());
   const [nonSubmittableRepos, setNonSubmittableRepos] = useState<Set<string>>(() => new Set());
+  /** 釘選清單；key = `${owner}/${name}`。issue #16 */
+  const [pinnedRepos, setPinnedRepos] = useState<Set<string>>(() => new Set());
   /** 使用者按 TopNav 重新整理按鈕時的旋轉狀態；獨立於初次載入，避免覆蓋既有資料閃白 */
   const [isRefreshingSummary, setIsRefreshingSummary] = useState<boolean>(false);
   const location = useLocation();
@@ -94,13 +117,14 @@ const AppShell = () => {
       setSummary(null);
       setError(null);
       setNeedsAuth(true);
+      setPinnedRepos(new Set());
       return;
     }
 
     let cancelled = false;
     setNeedsAuth(false);
     setError(null);
-    // summary + settings 並行取，兩者各自失敗不互相影響
+    // summary + settings + pinned 並行取，三者各自失敗不互相影響
     void Promise.all([
       fetchSummary()
         .then((data) => {
@@ -122,11 +146,60 @@ const AppShell = () => {
           new Set(rows.filter((r) => !r.canSubmitIssue).map((r) => r.repoName)),
         );
       }),
+      fetchMyPinnedRepos()
+        .then((rows) => {
+          if (cancelled) return;
+          setPinnedRepos(new Set(rows.map((r) => pinKey(r.repoOwner, r.repoName))));
+        })
+        .catch((err: unknown) => {
+          // 後端尚未部署 PinnedRepo 表（migration 未跑）或 401 → 視為空集合
+          // 不阻斷其他資料載入；console.warn 留紀錄供除錯
+          if (!cancelled) {
+            setPinnedRepos(new Set());
+            console.warn('[AppShell] fetchMyPinnedRepos 失敗，使用空集合：', err);
+          }
+        }),
     ]);
     return () => {
       cancelled = true;
     };
   }, [sessionStatus]);
+
+  /**
+   * 樂觀切換釘選狀態（issue #16）
+   * - 先把 set 立即更新讓 UI 反映；
+   * - 呼叫後端，失敗時 revert 並 log warn；
+   * - 重複 pin / unpin 觸發後端 409 / 404 視為「狀態已對齊」，吞掉錯誤
+   */
+  const togglePinnedRepo = useCallback(async (repoOwner: string, repoName: string) => {
+    const key = pinKey(repoOwner, repoName);
+    const wasPinned = pinnedRepos.has(key);
+    setPinnedRepos((prev) => {
+      const next = new Set(prev);
+      if (wasPinned) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    try {
+      if (wasPinned) {
+        await apiUnpinRepo(repoOwner, repoName);
+      } else {
+        await apiPinRepo(repoOwner, repoName);
+      }
+    } catch (err: unknown) {
+      const httpStatus = err instanceof ApiError ? err.httpStatus : null;
+      // 409 / 404 代表後端狀態與新意圖已一致（重複 pin / 重複 unpin），不必 revert
+      if (httpStatus !== 409 && httpStatus !== 404) {
+        setPinnedRepos((prev) => {
+          const next = new Set(prev);
+          if (wasPinned) next.add(key);
+          else next.delete(key);
+          return next;
+        });
+        console.warn('[AppShell] togglePinnedRepo 失敗，已回滾：', err);
+      }
+    }
+  }, [pinnedRepos]);
 
   // 路由變化時自動關閉 drawer（保險；NavLink 的 onClick 也會關閉）
   useEffect(() => {
@@ -191,14 +264,29 @@ const AppShell = () => {
     );
   }
 
-  const context: TAppShellContext = { summary, session, hiddenRepos, nonSubmittableRepos, refreshRepoSettings };
+  const context: TAppShellContext = {
+    summary,
+    session,
+    hiddenRepos,
+    nonSubmittableRepos,
+    refreshRepoSettings,
+    pinnedRepos,
+    togglePinnedRepo,
+  };
 
   return (
     <ToastProvider>
       <div className="flex h-full flex-col">
         <TopNav summary={summary} onMenuClick={openSidebar} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} />
         <div className="relative flex flex-1 overflow-hidden">
-          <Sidebar summary={summary} hiddenRepos={hiddenRepos} isOpen={isSidebarOpen} onClose={closeSidebar} />
+          <Sidebar
+            summary={summary}
+            hiddenRepos={hiddenRepos}
+            pinnedRepos={pinnedRepos}
+            onTogglePin={togglePinnedRepo}
+            isOpen={isSidebarOpen}
+            onClose={closeSidebar}
+          />
 
           {/* 手機版 drawer backdrop */}
           {isSidebarOpen && (

@@ -45,8 +45,25 @@ model User {
   issuesReviewed      Issue[]        @relation("IssueReviewer")
   repoSettingsUpdated RepoSettings[]
   auditLogs           AuditLog[]
+  pinnedRepos         PinnedRepo[]
 
   @@map("users")
+}
+
+// 個人化釘選清單（issue #16）
+// - 每人各自的偏好；Sidebar 預設只顯示自己 pin 過的 repo
+// - 沒有「團隊共享 pin」的概念；如未來要加再走另一張表
+model PinnedRepo {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repoOwner String
+  repoName  String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, repoOwner, repoName])
+  @@index([userId])
+  @@map("pinned_repos")
 }
 
 model Issue {

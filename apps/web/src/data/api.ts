@@ -14,6 +14,7 @@ import {
   type AuditLogRow,
   type GithubHealthStatus,
   type IssueStatus,
+  type PinnedRepoDTO,
   type RoadmapIssuesPage,
   type PublicRepoSettingsRow,
   type RefreshDataResult,
@@ -466,4 +467,32 @@ export async function refreshAdminData(): Promise<RefreshDataResult> {
  */
 export async function fetchGithubHealth(): Promise<GithubHealthStatus> {
   return apiFetch<GithubHealthStatus>(API_PATHS.githubHealth);
+}
+
+// ============================================================================
+// 個人化釘選清單（issue #16）
+// ----------------------------------------------------------------------------
+// Sidebar 預設只顯示 fetchMyPinnedRepos 回的 repo 集合；其他 repo 收進
+// 「未釘選 repos」可展開。pin/unpin 後可呼叫 fetchMyPinnedRepos 重整。
+// ============================================================================
+
+/** 取得當前登入者的釘選清單；未登入時 apiFetch 會 throw 401 ApiError */
+export async function fetchMyPinnedRepos(): Promise<PinnedRepoDTO[]> {
+  return apiFetch<PinnedRepoDTO[]>(API_PATHS.myPinnedRepos);
+}
+
+/** 釘選一個 repo。重複釘選後端會回 409，由呼叫端 catch 後可忽略 */
+export async function pinRepo(repoOwner: string, repoName: string): Promise<PinnedRepoDTO> {
+  return apiFetch<PinnedRepoDTO>(API_PATHS.myPinnedRepos, {
+    method: 'POST',
+    body: JSON.stringify({ repoOwner, repoName }),
+  });
+}
+
+/** 取消釘選；找不到後端會回 404，由呼叫端 catch 後可忽略 */
+export async function unpinRepo(repoOwner: string, repoName: string): Promise<void> {
+  await apiFetch<{ repoOwner: string; repoName: string }>(
+    API_PATHS.myPinnedRepo(repoOwner, repoName),
+    { method: 'DELETE' },
+  );
 }

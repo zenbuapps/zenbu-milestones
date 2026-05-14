@@ -1,6 +1,6 @@
-import { ChevronRight, LayoutDashboard, Lock, Search, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { ChevronRight, LayoutDashboard, Lock, Pin, PinOff, Search, Star, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import { Link, NavLink } from 'react-router-dom';
 import type { RepoSummary, Summary } from 'shared';
 
 type TSidebarProps = {
@@ -11,64 +11,144 @@ type TSidebarProps = {
    * 傳入空 set 代表全部顯示（fallback；例如後端未部署時）
    */
   hiddenRepos?: Set<string>;
+  /**
+   * 個人化釘選清單（issue #16）。key 為 `${owner}/${name}`；
+   * Sidebar 預設只顯示 pin 過的 repo，其餘 repo 折疊在「未釘選 repos」區段。
+   */
+  pinnedRepos: Set<string>;
+  /** 點 star icon 時呼叫；樂觀更新由父層處理 */
+  onTogglePin: (repoOwner: string, repoName: string) => Promise<void> | void;
   /** 手機版 drawer 是否開啟；桌機版忽略此值（一律顯示） */
   isOpen?: boolean;
   /** 手機版 drawer 關閉回呼（點 NavLink、點 X、點 backdrop 皆觸發） */
   onClose?: () => void;
 };
 
-/**
- * 將 repo 按字母序排列（呼叫端可能已排序，但此處做一次保險）
- */
+/** 目前所有 repo 預設 owner 為 zenbuapps；shared 沒在 RepoSummary 上帶 owner */
+const DEFAULT_OWNER = 'zenbuapps';
+const pinKey = (owner: string, name: string): string => `${owner}/${name}`;
+
+/** 將 repo 按字母序排列（呼叫端可能已排序，但此處做一次保險） */
 const sortByName = (a: RepoSummary, b: RepoSummary): number =>
   a.name.localeCompare(b.name);
+
+type TRepoNavItemProps = {
+  repo: RepoSummary;
+  pinned: boolean;
+  onTogglePin: (owner: string, name: string) => void;
+  onNavClick: () => void;
+  /** 自訂 key prefix，避免 inline 與 collapse 兩處同 repo 重渲染衝突 */
+  keyPrefix?: string;
+};
+
+/**
+ * Sidebar 單一 repo 連結 + star pin 按鈕。
+ * 為了不讓 star 點擊觸發 NavLink 導航，star 按鈕加 stopPropagation + preventDefault。
+ */
+const RepoNavItem = ({ repo, pinned, onTogglePin, onNavClick }: TRepoNavItemProps) => {
+  const handleStarClick = (e: MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onTogglePin(DEFAULT_OWNER, repo.name);
+  };
+  return (
+    <NavLink
+      to={`/repo/${repo.name}`}
+      onClick={onNavClick}
+      className={({ isActive }) =>
+        `group flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+          isActive
+            ? 'bg-[--color-primary-50] font-semibold text-[--color-brand]'
+            : 'text-[--color-text-secondary] hover:bg-[--color-surface-overlay]'
+        }`
+      }
+    >
+      <span className="flex min-w-0 items-center gap-1.5">
+        {repo.isPrivate && (
+          <Lock size={12} strokeWidth={2} className="flex-shrink-0 text-[--color-text-muted]" />
+        )}
+        <span className="truncate">{repo.name}</span>
+      </span>
+      <span className="flex flex-shrink-0 items-center gap-1">
+        <span className="rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
+          {repo.roadmapCount}
+        </span>
+        <button
+          type="button"
+          onClick={handleStarClick}
+          aria-label={pinned ? `取消釘選 ${repo.name}` : `釘選 ${repo.name}`}
+          aria-pressed={pinned}
+          title={pinned ? '取消釘選' : '釘選'}
+          className={`rounded p-1 transition-colors hover:bg-[--color-surface-overlay] ${
+            pinned ? 'text-[--color-brand]' : 'text-[--color-text-muted] opacity-0 group-hover:opacity-100 focus:opacity-100'
+          }`}
+        >
+          <Star size={12} strokeWidth={2} fill={pinned ? 'currentColor' : 'none'} />
+        </button>
+      </span>
+    </NavLink>
+  );
+};
 
 /**
  * 主要導覽側邊欄
  * - 桌機（≥ md）常駐於左側（靜態佈局）
  * - 手機（< md）為 off-canvas drawer，由 TopNav 的漢堡按鈕觸發
+ *
+ * issue #16：預設清單從「有 Milestone」改為「使用者釘選」。
+ *   - 上方主清單：pinnedRepos 命中的 repo（依字母序）
+ *   - 下方收合區：未釘選的 repo（用 chevron 展開；搜尋時內嵌在主清單後方）
+ *   - pinnedRepos 為空 → 顯示「尚未釘選任何 repo」提示，引導使用者展開下方清單
  */
-const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProps) => {
+const Sidebar = ({
+  summary,
+  hiddenRepos,
+  pinnedRepos,
+  onTogglePin,
+  isOpen = false,
+  onClose,
+}: TSidebarProps) => {
   const [showOthers, setShowOthers] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  const { withRoadmaps, withoutRoadmaps } = useMemo(() => {
+  const { pinned, unpinned } = useMemo(() => {
     if (!summary) {
-      return { withRoadmaps: [] as RepoSummary[], withoutRoadmaps: [] as RepoSummary[] };
+      return { pinned: [] as RepoSummary[], unpinned: [] as RepoSummary[] };
     }
     // 先套用 admin 的 visibleOnUI 過濾（hiddenRepos 來自 AppShell 的 /api/repos/settings）
-    // hiddenRepos 未提供時視同空 set（fall back 全部顯示）
     const visible = hiddenRepos && hiddenRepos.size > 0
       ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
       : summary.repos;
     const needle = searchQuery.trim().toLowerCase();
     const matchesQuery = (r: RepoSummary): boolean =>
       needle === '' || r.name.toLowerCase().includes(needle);
-    const active = visible
-      .filter((r) => r.roadmapCount > 0)
+    const pinnedList = visible
+      .filter((r) => pinnedRepos.has(pinKey(DEFAULT_OWNER, r.name)))
       .filter(matchesQuery)
       .slice()
       .sort(sortByName);
-    const inactive = visible
-      .filter((r) => r.roadmapCount === 0)
+    const unpinnedList = visible
+      .filter((r) => !pinnedRepos.has(pinKey(DEFAULT_OWNER, r.name)))
       .filter(matchesQuery)
       .slice()
       .sort(sortByName);
-    return { withRoadmaps: active, withoutRoadmaps: inactive };
-  }, [summary, hiddenRepos, searchQuery]);
+    return { pinned: pinnedList, unpinned: unpinnedList };
+  }, [summary, hiddenRepos, pinnedRepos, searchQuery]);
 
-  // 搜尋有命中「其他 repos」時自動展開該區段；清空搜尋後不強制收回（讓使用者手動控制）
+  // 搜尋有命中「未釘選 repos」時自動展開；清空搜尋後不強制收回
   useEffect(() => {
-    if (searchQuery.trim() !== '' && withoutRoadmaps.length > 0) {
+    if (searchQuery.trim() !== '' && unpinned.length > 0) {
       setShowOthers(true);
     }
-  }, [searchQuery, withoutRoadmaps.length]);
+  }, [searchQuery, unpinned.length]);
 
   const isSearching = searchQuery.trim() !== '';
 
   const handleNavClick = () => {
-    // 手機版點選後收起；桌機版 onClose 可忽略（state 不受影響）
     onClose?.();
+  };
+  const handleTogglePin = (owner: string, name: string) => {
+    void onTogglePin(owner, name);
   };
 
   return (
@@ -132,92 +212,81 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
           )}
         </div>
 
-        <div className="mt-4 mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-[--color-text-muted]">
-          Repositories
+        <div className="mt-4 mb-2 flex items-baseline justify-between px-3">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-[--color-text-muted]">
+            已釘選 Repos
+          </span>
+          {pinned.length > 0 && (
+            <span className="text-[10px] font-medium text-[--color-text-muted]">
+              {pinned.length}
+            </span>
+          )}
         </div>
 
-        {withRoadmaps.length === 0 && (
-          <div className="px-3 py-2 text-xs text-[--color-text-muted]">
-            {searchQuery.trim() === '' ? '尚無資料' : '找不到符合的 repo'}
+        {pinned.length === 0 && (
+          <div className="rounded-lg border border-dashed border-[--color-border] bg-[--color-surface] px-3 py-3 text-xs text-[--color-text-muted]">
+            {isSearching ? (
+              <>找不到符合的釘選 repo</>
+            ) : (
+              <div className="flex flex-col gap-1">
+                <span className="inline-flex items-center gap-1 text-[--color-text-secondary]">
+                  <Pin size={12} strokeWidth={2} />
+                  尚未釘選任何 repo
+                </span>
+                <span>
+                  到下方「未釘選 repos」展開或在
+                  {' '}
+                  <Link to="/" onClick={handleNavClick} className="text-[--color-brand] underline">
+                    總覽
+                  </Link>
+                  {' '}
+                  點 ⭐ 加入。
+                </span>
+              </div>
+            )}
           </div>
         )}
 
-        {withRoadmaps.map((repo) => (
-          <NavLink
-            key={repo.name}
-            to={`/repo/${repo.name}`}
-            onClick={handleNavClick}
-            className={({ isActive }) =>
-              `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                isActive
-                  ? 'bg-[--color-primary-50] font-semibold text-[--color-brand]'
-                  : 'text-[--color-text-secondary] hover:bg-[--color-surface-overlay]'
-              }`
-            }
-          >
-            <span className="flex min-w-0 items-center gap-1.5">
-              {repo.isPrivate && (
-                <Lock size={12} strokeWidth={2} className="flex-shrink-0 text-[--color-text-muted]" />
-              )}
-              <span className="truncate">{repo.name}</span>
-            </span>
-            <span className="flex-shrink-0 rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
-              {repo.roadmapCount}
-            </span>
-          </NavLink>
+        {pinned.map((repo) => (
+          <RepoNavItem
+            key={`pin-${repo.name}`}
+            repo={repo}
+            pinned
+            onTogglePin={handleTogglePin}
+            onNavClick={handleNavClick}
+          />
         ))}
 
         {/*
-         * 搜尋進行中 + 「其他 repos」有命中 → 把該區段內嵌在 Repositories 後面、強制
-         * 展開，避免使用者要捲到 sidebar 底部才看得到匹配結果（issue #4）。
-         * 非搜尋時則維持原本 mt-auto 底端的 collapse 行為。
+         * 搜尋進行中 + 「未釘選 repos」有命中 → 內嵌在主清單後面（issue #4 視覺一致）。
          */}
-        {isSearching && withoutRoadmaps.length > 0 && (
+        {isSearching && unpinned.length > 0 && (
           <>
             <div className="mt-4 mb-2 flex items-baseline justify-between px-3">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-[--color-text-muted]">
-                其他 repos
+                未釘選 repos
               </span>
               <span className="text-[10px] font-medium text-[--color-text-muted]">
-                找到 {withoutRoadmaps.length} 個
+                找到 {unpinned.length} 個
               </span>
             </div>
-            {withoutRoadmaps.map((repo) => (
-              <NavLink
+            {unpinned.map((repo) => (
+              <RepoNavItem
                 key={`search-${repo.name}`}
-                to={`/repo/${repo.name}`}
-                onClick={handleNavClick}
-                className={({ isActive }) =>
-                  `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                    isActive
-                      ? 'bg-[--color-primary-50] font-semibold text-[--color-brand]'
-                      : 'text-[--color-text-secondary] hover:bg-[--color-surface-overlay]'
-                  }`
-                }
-              >
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {repo.isPrivate && (
-                    <Lock
-                      size={12}
-                      strokeWidth={2}
-                      className="flex-shrink-0 text-[--color-text-muted]"
-                    />
-                  )}
-                  <span className="truncate">{repo.name}</span>
-                </span>
-                <span className="flex-shrink-0 rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
-                  {repo.roadmapCount}
-                </span>
-              </NavLink>
+                repo={repo}
+                pinned={false}
+                onTogglePin={handleTogglePin}
+                onNavClick={handleNavClick}
+              />
             ))}
           </>
         )}
       </nav>
 
       {/*
-       * 非搜尋狀態的「其他 repos」收合區：維持原本 mt-auto 卡底端 + chevron 可收合
+       * 非搜尋狀態的「未釘選 repos」收合區：維持 mt-auto 卡底端 + chevron 收合
        */}
-      {!isSearching && withoutRoadmaps.length > 0 && (
+      {!isSearching && unpinned.length > 0 && (
         <div className="mt-auto border-t border-[--color-border] px-3 py-3">
           <button
             type="button"
@@ -225,7 +294,10 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
             aria-expanded={showOthers}
             className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium text-[--color-text-muted] transition-colors hover:bg-[--color-surface-overlay]"
           >
-            <span>其他 repos（無 roadmap）</span>
+            <span className="inline-flex items-center gap-1">
+              <PinOff size={12} strokeWidth={2} />
+              未釘選 repos（{unpinned.length}）
+            </span>
             <ChevronRight
               size={14}
               strokeWidth={2}
@@ -234,33 +306,14 @@ const Sidebar = ({ summary, hiddenRepos, isOpen = false, onClose }: TSidebarProp
           </button>
           {showOthers && (
             <ul className="mt-1 flex flex-col gap-1">
-              {withoutRoadmaps.map((repo) => (
+              {unpinned.map((repo) => (
                 <li key={repo.name}>
-                  <NavLink
-                    to={`/repo/${repo.name}`}
-                    onClick={handleNavClick}
-                    className={({ isActive }) =>
-                      `flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                        isActive
-                          ? 'bg-[--color-primary-50] font-semibold text-[--color-brand]'
-                          : 'text-[--color-text-secondary] hover:bg-[--color-surface-overlay]'
-                      }`
-                    }
-                  >
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      {repo.isPrivate && (
-                        <Lock
-                          size={12}
-                          strokeWidth={2}
-                          className="flex-shrink-0 text-[--color-text-muted]"
-                        />
-                      )}
-                      <span className="truncate">{repo.name}</span>
-                    </span>
-                    <span className="flex-shrink-0 rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
-                      {repo.roadmapCount}
-                    </span>
-                  </NavLink>
+                  <RepoNavItem
+                    repo={repo}
+                    pinned={false}
+                    onTogglePin={handleTogglePin}
+                    onNavClick={handleNavClick}
+                  />
                 </li>
               ))}
             </ul>

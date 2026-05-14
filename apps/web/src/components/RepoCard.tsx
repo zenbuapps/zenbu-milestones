@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowRight, Clock, ExternalLink, Lock } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Clock, ExternalLink, Lock, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { RepoSummary } from 'shared';
 import { formatRelative } from '../utils/date';
@@ -6,13 +6,18 @@ import ProgressBar from './ProgressBar';
 
 type TRepoCardProps = {
   repo: RepoSummary;
+  /** 是否已釘選（issue #16）；省略視為 false */
+  pinned?: boolean;
+  /** 點 star 按鈕呼叫 */
+  onTogglePin?: () => void;
 };
 
 /**
  * Repository 卡片
  * 顯示語言、隱私、描述、roadmap 完成率、下一個 roadmap 與逾期警告
+ * issue #16：左上角加 star 按鈕，方便從總覽 pin / unpin 此 repo。
  */
-const RepoCard = ({ repo }: TRepoCardProps) => {
+const RepoCard = ({ repo, pinned, onTogglePin }: TRepoCardProps) => {
   const completionPct = Math.round(repo.completionRate * 100);
 
   return (
@@ -20,6 +25,20 @@ const RepoCard = ({ repo }: TRepoCardProps) => {
       {/* 標題列 */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
+          {onTogglePin && (
+            <button
+              type="button"
+              onClick={onTogglePin}
+              aria-label={pinned ? `取消釘選 ${repo.name}` : `釘選 ${repo.name}`}
+              aria-pressed={pinned}
+              title={pinned ? '取消釘選' : '釘選 — 加入 Sidebar 預設清單'}
+              className={`rounded p-1 transition-colors hover:bg-[--color-surface-overlay] ${
+                pinned ? 'text-[--color-brand]' : 'text-[--color-text-muted]'
+              }`}
+            >
+              <Star size={14} strokeWidth={2} fill={pinned ? 'currentColor' : 'none'} />
+            </button>
+          )}
           <h3 className="truncate text-base font-semibold text-[--color-text-primary]">
             {repo.name}
           </h3>

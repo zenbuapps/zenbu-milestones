@@ -4,25 +4,48 @@ import { useOutletContext } from 'react-router-dom';
 import type { TAppShellContext } from '../AppShell';
 import CompletionBarChart from '../charts/CompletionBarChart';
 import StatusDonutChart from '../charts/StatusDonutChart';
+import UserRoleTable from '../components/admin/UserRoleTable';
 import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
 import RepoCard from '../components/RepoCard';
 import StatCard from '../components/StatCard';
 
+/** 目前所有 repo 預設 owner（與 Sidebar 保持一致）*/
+const DEFAULT_OWNER = 'zenbuapps';
+const pinKey = (owner: string, name: string): string => `${owner}/${name}`;
+
 /**
  * 總覽頁
- * 頂部統計卡 + 兩張圖表 + Repo 卡片 grid
+ * 頂部統計卡 + 兩張圖表 + Repo 卡片 grid +（admin）使用者管理區塊
+ *
+ * issue #16：
+ *   - 統計卡的 Open / Closed Issues 改為「全 GitHub issue」數字（後端 buildRepoBundle 已換實作）
+ *   - Repo 卡片 grid 不再以 roadmapCount > 0 過濾，顯示所有可見 repo
+ *   - 每張卡片新增 ⭐ 按鈕，可直接 pin/unpin（影響 Sidebar 預設清單）
+ *   - 圖表下方加入「使用者管理」區塊；只在 session.user.role === 'admin' 時渲染
  */
 const OverviewPage = () => {
-  const { summary, hiddenRepos } = useOutletContext<TAppShellContext>();
+  const { summary, hiddenRepos, pinnedRepos, togglePinnedRepo, session } =
+    useOutletContext<TAppShellContext>();
 
-  const activeRepos = useMemo(() => {
+  const isAdmin =
+    session.state.status === 'authenticated' && session.state.user.role === 'admin';
+
+  /** 圖表用：仍以「有 roadmap」過濾，避免空 roadmap 把 bar chart 拉平成一片 0 */
+  const reposWithRoadmaps = useMemo(() => {
     if (!summary) return [];
-    // 先套 admin visibleOnUI 過濾再挑 roadmap > 0 的
     const visible = hiddenRepos.size > 0
       ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
       : summary.repos;
     return visible.filter((r) => r.roadmapCount > 0);
+  }, [summary, hiddenRepos]);
+
+  /** 卡片 grid 用：顯示所有可見 repo（issue #16）*/
+  const visibleRepos = useMemo(() => {
+    if (!summary) return [];
+    return hiddenRepos.size > 0
+      ? summary.repos.filter((r) => !hiddenRepos.has(r.name))
+      : summary.repos;
   }, [summary, hiddenRepos]);
 
   // Donut 用的狀態分布：透過 summary.totals 推導
@@ -95,8 +118,8 @@ const OverviewPage = () => {
               各 repo 的 open / closed issues 堆疊
             </p>
           </div>
-          {activeRepos.length > 0 ? (
-            <CompletionBarChart repos={activeRepos} />
+          {reposWithRoadmaps.length > 0 ? (
+            <CompletionBarChart repos={reposWithRoadmaps} />
           ) : (
             <div className="flex h-[320px] items-center justify-center text-sm text-[--color-text-muted]">
               尚無資料
@@ -117,18 +140,36 @@ const OverviewPage = () => {
         </div>
       </div>
 
-      {/* Repo 卡片 grid */}
-      {activeRepos.length === 0 ? (
+      {/* Repo 卡片 grid（issue #16：全部 visible repo，附 ⭐ pin 按鈕）*/}
+      {visibleRepos.length === 0 ? (
         <EmptyState
           icon={Inbox}
-          title="目前沒有任何有 roadmap 的 repo"
-          description="當 org 底下的 repo 建立了 roadmap 後，會自動出現在這裡。"
+          title="目前沒有任何 repo"
+          description="zenbuapps org 底下若有新 repo，會自動出現在這裡。"
         />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {activeRepos.map((repo) => (
-            <RepoCard key={repo.name} repo={repo} />
-          ))}
+          {visibleRepos.map((repo) => {
+            const isPinned = pinnedRepos.has(pinKey(DEFAULT_OWNER, repo.name));
+            return (
+              <RepoCard
+                key={repo.name}
+                repo={repo}
+                pinned={isPinned}
+                onTogglePin={() => void togglePinnedRepo(DEFAULT_OWNER, repo.name)}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/*
+       * 使用者管理（issue #16）—— 僅 admin 看得到。
+       * 一般使用者不會渲染這個 section（也不會觸發 fetch /api/admin/users，避免 403 噪音）。
+       */}
+      {isAdmin && (
+        <div className="mt-8">
+          <UserRoleTable />
         </div>
       )}
     </>

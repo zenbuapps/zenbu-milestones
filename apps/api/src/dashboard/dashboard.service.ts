@@ -355,14 +355,19 @@ export class DashboardService {
     const openMs = roadmapsWithIssues.filter((m) => m.state === 'open');
     const closedMs = roadmapsWithIssues.filter((m) => m.state === 'closed');
     const overdueMs = openMs.filter((m) => isOverdue(m.dueOn, m.state));
-    const openIssues = roadmapsWithIssues.reduce(
-      (s, m) => s + m.openIssues,
-      0,
-    );
-    const closedIssues = roadmapsWithIssues.reduce(
-      (s, m) => s + m.closedIssues,
-      0,
-    );
+    // issue #16: openIssues / closedIssues 改為「全 repo」計數（含不掛 roadmap 的 issue），
+    // 反映 GitHub UI 上的真實 issue 狀況。allIssuesRaw 為未經 SENSITIVE_LABELS 過濾的
+    // 原始 GitHub issue 陣列，與 GitHub UI 顯示一致。前端「Open Issues / Closed Issues」
+    // 統計也將同步包含未掛 milestone 的部分。
+    let openIssues = 0;
+    let closedIssues = 0;
+    for (const issue of allIssuesRaw) {
+      // listAllRepoIssues 可能同時帶 PR；PR 在 detail.allIssues 已被 toIssueLite 過濾，
+      // 此處同樣排除以避免把 PR 算入 issue 計數
+      if ((issue as { pull_request?: unknown }).pull_request) continue;
+      if (issue.state === 'open') openIssues += 1;
+      else if (issue.state === 'closed') closedIssues += 1;
+    }
     const nextDue = openMs
       .filter((m): m is Roadmap & { dueOn: string } => !!m.dueOn)
       .sort(

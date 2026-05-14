@@ -1,12 +1,14 @@
 import {
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   CircleDot,
   Inbox,
   Milestone as RoadmapIcon,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { IssueLite, RepoDetail } from 'shared';
 import { formatTimeAgo } from '../utils/date';
 import EmptyState from './EmptyState';
@@ -49,8 +51,15 @@ const escapeRegExp = (raw: string): string =>
  * 某 repo 的完整 issue 列表 + 濾條
  * 資料來源：`detail.allIssues`（不自行 fetch）
  */
+/** 每頁筆數選項（issue #16）*/
+const PAGE_SIZE_OPTIONS = [20, 50, 100] as const;
+type TPageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+
 const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
   const [query, setQuery] = useState<TFilterQuery>(DEFAULT_QUERY);
+  /** issue #16：分頁狀態（client-side；allIssues 已全載）*/
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<TPageSize>(20);
 
   /** 建立 issue number → roadmap number 的 map（issue 自己沒帶 roadmap 欄位） */
   const issueToRoadmap = useMemo<Map<number, number>>(() => {
@@ -178,6 +187,21 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
   /** 整個 repo 沒有任何 issue 與套 filter 後為 0 是兩個不同情境，要給不同 EmptyState */
   const hasNoIssuesAtAll = detail.allIssues.length === 0;
 
+  // 任一濾條 / pageSize 變動時把頁碼重設回 1，避免顯示空白頁
+  // （filtered 引用穩定性已由上方 useMemo 控制；用 filtered.length 當依賴即可）
+  const filteredCount = filtered.length;
+  useEffect(() => {
+    setPage(1);
+  }, [filteredCount, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCount / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const sliceStart = (safePage - 1) * pageSize;
+  const sliceEnd = sliceStart + pageSize;
+  const visible = filtered.slice(sliceStart, sliceEnd);
+  const rangeStart = filteredCount === 0 ? 0 : sliceStart + 1;
+  const rangeEnd = Math.min(sliceEnd, filteredCount);
+
   return (
     <section aria-label="全部 Issues" className="mt-8">
       <header className="mb-4 flex items-baseline justify-between gap-2">
@@ -206,7 +230,7 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
             onChange={setQuery}
           />
 
-          {filtered.length === 0 ? (
+          {filteredCount === 0 ? (
             <EmptyState
               icon={Inbox}
               title="無符合條件的 Issue"
@@ -218,28 +242,125 @@ const RepoIssueList = ({ detail }: TRepoIssueListProps) => {
               }
             />
           ) : (
-            <ul className="divide-y divide-[--color-border] overflow-hidden rounded-xl border border-[--color-border] bg-white">
-              {filtered.map((issue) => {
-                const linkedRoadmap = issueToRoadmap.get(issue.number);
-                const linkedTitle =
-                  linkedRoadmap !== undefined
-                    ? roadmapTitleByNumber.get(linkedRoadmap) ?? null
-                    : null;
-                return (
-                  <IssueRow
-                    key={issue.number}
-                    issue={issue}
-                    keyword={query.keyword}
-                    roadmapNumber={linkedRoadmap ?? null}
-                    roadmapTitle={linkedTitle}
-                  />
-                );
-              })}
-            </ul>
+            <>
+              <ul className="divide-y divide-[--color-border] overflow-hidden rounded-xl border border-[--color-border] bg-white">
+                {visible.map((issue) => {
+                  const linkedRoadmap = issueToRoadmap.get(issue.number);
+                  const linkedTitle =
+                    linkedRoadmap !== undefined
+                      ? roadmapTitleByNumber.get(linkedRoadmap) ?? null
+                      : null;
+                  return (
+                    <IssueRow
+                      key={issue.number}
+                      issue={issue}
+                      keyword={query.keyword}
+                      roadmapNumber={linkedRoadmap ?? null}
+                      roadmapTitle={linkedTitle}
+                    />
+                  );
+                })}
+              </ul>
+
+              <Pager
+                rangeStart={rangeStart}
+                rangeEnd={rangeEnd}
+                total={filteredCount}
+                page={safePage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                onPageChange={setPage}
+                onPageSizeChange={(s) => setPageSize(s)}
+              />
+            </>
           )}
         </>
       )}
     </section>
+  );
+};
+
+type TPagerProps = {
+  rangeStart: number;
+  rangeEnd: number;
+  total: number;
+  page: number;
+  totalPages: number;
+  pageSize: TPageSize;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: TPageSize) => void;
+};
+
+/**
+ * Issue 列表分頁器（issue #16）
+ * - 左：顯示「第 X-Y 筆 / 共 N 筆」與每頁筆數切換
+ * - 右：上一頁 / 第 P / N 頁 / 下一頁
+ * - 單頁時仍顯示，讓使用者看到每頁筆數切換鈕
+ */
+const Pager = ({
+  rangeStart,
+  rangeEnd,
+  total,
+  page,
+  totalPages,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
+}: TPagerProps) => {
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+  return (
+    <div className="mt-3 flex flex-col gap-2 rounded-xl border border-[--color-border] bg-white px-3 py-2 text-xs text-[--color-text-secondary] sm:flex-row sm:items-center sm:justify-between sm:px-4">
+      <div className="flex items-center gap-3">
+        <span>
+          顯示第 <span className="font-semibold text-[--color-text-primary]">{rangeStart}</span>
+          –<span className="font-semibold text-[--color-text-primary]">{rangeEnd}</span> 筆
+          / 共 <span className="font-semibold text-[--color-text-primary]">{total}</span> 筆
+        </span>
+        <label className="inline-flex items-center gap-1">
+          每頁
+          <select
+            value={pageSize}
+            onChange={(e) => onPageSizeChange(Number(e.target.value) as TPageSize)}
+            className="rounded-md border border-[--color-border] bg-white px-1.5 py-0.5 text-xs text-[--color-text-primary] focus:border-[--color-brand] focus:outline-none focus:ring-2 focus:ring-[--color-brand-ring]"
+            aria-label="每頁筆數"
+          >
+            {PAGE_SIZE_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+          筆
+        </label>
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(page - 1)}
+          disabled={!canPrev}
+          aria-label="上一頁"
+          className="inline-flex items-center gap-1 rounded-md border border-[--color-border] px-2 py-1 text-xs font-medium text-[--color-text-secondary] hover:bg-[--color-surface-overlay] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <ChevronLeft size={12} strokeWidth={2.25} />
+          上一頁
+        </button>
+        <span aria-live="polite">
+          第 <span className="font-semibold text-[--color-text-primary]">{page}</span>
+          / <span className="font-semibold text-[--color-text-primary]">{totalPages}</span> 頁
+        </span>
+        <button
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+          disabled={!canNext}
+          aria-label="下一頁"
+          className="inline-flex items-center gap-1 rounded-md border border-[--color-border] px-2 py-1 text-xs font-medium text-[--color-text-secondary] hover:bg-[--color-surface-overlay] disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          下一頁
+          <ChevronRight size={12} strokeWidth={2.25} />
+        </button>
+      </div>
+    </div>
   );
 };
 
