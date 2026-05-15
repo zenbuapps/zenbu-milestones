@@ -11,7 +11,14 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useEffect, useMemo, useState, type MouseEvent } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+} from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import type { RepoSummary, Summary } from 'shared';
 
@@ -105,6 +112,44 @@ const AdminNavLink = ({ to, icon: Icon, label, onClick }: TAdminNavLinkProps) =>
   );
 };
 
+/**
+ * Sidebar 名稱 span：當 text-overflow 截斷時才掛 `title` tooltip（issue #17）
+ *
+ * 為什麼不直接無條件設 title：使用者要求短名稱（明明放得下）不要顯示 tooltip
+ * 才不會干擾。原生 `<span title>` 只要 hover 就會顯示 tooltip，無法區分
+ * 「真截斷 / 沒截斷」—— 必須在 JS 端用 scrollWidth > clientWidth 偵測。
+ *
+ * 用 ResizeObserver 監聽容器寬度變化（桌機 ↔ 手機 drawer 切換、視窗 resize、
+ * 文字 reflow 都會觸發），不靠定時器或 hover handler。
+ */
+const TruncatedName = ({ name }: { name: string }) => {
+  const ref = useRef<HTMLSpanElement | null>(null);
+  const [overflowing, setOverflowing] = useState<boolean>(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = (): void => {
+      setOverflowing(el.scrollWidth > el.clientWidth);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [name]);
+
+  return (
+    <span
+      ref={ref}
+      className="truncate"
+      // 只有真截斷時才掛 title，避免短名稱滑鼠移上去出現多餘 tooltip
+      title={overflowing ? name : undefined}
+    >
+      {name}
+    </span>
+  );
+};
+
 type TRepoNavItemProps = {
   repo: RepoSummary;
   pinned: boolean;
@@ -140,7 +185,7 @@ const RepoNavItem = ({ repo, pinned, onTogglePin, onNavClick }: TRepoNavItemProp
         {repo.isPrivate && (
           <Lock size={12} strokeWidth={2} className="flex-shrink-0 text-[--color-text-muted]" />
         )}
-        <span className="truncate">{repo.name}</span>
+        <TruncatedName name={repo.name} />
       </span>
       <span className="flex flex-shrink-0 items-center gap-1">
         {/*
