@@ -381,6 +381,14 @@ export class DashboardService {
       ),
     );
 
+    const allIssuesLite = toIssueLite(allIssuesRaw);
+    // issue #19：diagnostic log，方便 pod logs 確認每個 repo 實際拿到多少 issue
+    // （raw 含 PR；lite 已 toIssueLite 過濾 PR 與 sensitive label）
+    this.logger.log(
+      `repo=${name} roadmaps=${roadmapsWithIssues.length} ` +
+        `raw_issues=${allIssuesRaw.length} lite_issues=${allIssuesLite.length}`,
+    );
+
     const detail: RepoDetail = {
       name,
       description: repoMeta.description ?? null,
@@ -389,7 +397,7 @@ export class DashboardService {
       language: repoMeta.language ?? null,
       updatedAt: repoMeta.updated_at ?? new Date().toISOString(),
       roadmaps: roadmapsWithIssues,
-      allIssues: toIssueLite(allIssuesRaw),
+      allIssues: allIssuesLite,
     };
 
     const openMs = roadmapsWithIssues.filter((m) => m.state === 'open');

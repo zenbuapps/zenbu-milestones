@@ -230,16 +230,42 @@ export class GitHubService implements OnModuleInit {
   /**
    * 列出 repo 所有 open + closed issues（不限 roadmap），依 updatedAt desc。
    * 同樣不過濾 PR / sensitive label。
+   *
+   * issue #19：之前用單一 `state: 'all'` 呼叫 GitHub listForRepo，實測有 repo
+   * 偶發回不到剛建立但無 milestone / 無 label 的 issue（例：zenbu-webinar
+   * 的 #33、#34）。Octokit paginate + state=all 的組合疑似在某些 repo
+   * 上行為不穩定。改為 **並行兩次** request 分別抓 open / closed，
+   * 然後在 client 端合併並依 updatedAt desc 排序。同源資料、不依賴單一
+   * state=all 的後端排序語意，可規避該 bug。
+   *
+   * 副作用：API call 多一倍（每 repo 多打一次），但對 ZenbuApps org 數十個
+   * repo 且有 in-memory cache 5min TTL 的場景，量級可接受。
    */
   async listAllRepoIssues(owner: string, repo: string): Promise<OctokitIssue[]> {
     try {
-      return await this.octokit.paginate(this.octokit.issues.listForRepo, {
-        owner,
-        repo,
-        state: 'all',
-        per_page: 100,
-        sort: 'updated',
-        direction: 'desc',
+      const [openIssues, closedIssues] = await Promise.all([
+        this.octokit.paginate(this.octokit.issues.listForRepo, {
+          owner,
+          repo,
+          state: 'open',
+          per_page: 100,
+          sort: 'updated',
+          direction: 'desc',
+        }),
+        this.octokit.paginate(this.octokit.issues.listForRepo, {
+          owner,
+          repo,
+          state: 'closed',
+          per_page: 100,
+          sort: 'updated',
+          direction: 'desc',
+        }),
+      ]);
+      // 兩個列表都已是 updatedAt desc；合併後再排序一次以維持整體順序
+      return [...openIssues, ...closedIssues].sort((a, b) => {
+        const aTs = Date.parse(a.updated_at);
+        const bTs = Date.parse(b.updated_at);
+        return bTs - aTs;
       });
     } catch (err) {
       throw this.mapError(err);
