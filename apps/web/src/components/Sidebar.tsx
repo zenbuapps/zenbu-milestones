@@ -1,6 +1,18 @@
-import { ChevronRight, LayoutDashboard, Lock, Pin, PinOff, Search, Star, X } from 'lucide-react';
+import {
+  ChevronRight,
+  Inbox,
+  LayoutDashboard,
+  Lock,
+  Pin,
+  PinOff,
+  Search,
+  Star,
+  Users,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { useEffect, useMemo, useState, type MouseEvent } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import type { RepoSummary, Summary } from 'shared';
 
 type TSidebarProps = {
@@ -18,6 +30,8 @@ type TSidebarProps = {
   pinnedRepos: Set<string>;
   /** 點 star icon 時呼叫；樂觀更新由父層處理 */
   onTogglePin: (repoOwner: string, repoName: string) => Promise<void> | void;
+  /** 是否顯示 admin 專用區段（issue #23：使用者列表 / 待審核 Issue） */
+  isAdmin?: boolean;
   /** 手機版 drawer 是否開啟；桌機版忽略此值（一律顯示） */
   isOpen?: boolean;
   /** 手機版 drawer 關閉回呼（點 NavLink、點 X、點 backdrop 皆觸發） */
@@ -45,6 +59,50 @@ const badgeClassesForOpenIssues = (count: number): string => {
   if (count <= 5) return 'bg-green-50 text-green-700';
   if (count <= 10) return 'bg-orange-50 text-orange-700';
   return 'bg-red-50 text-red-700';
+};
+
+type TAdminNavLinkProps = {
+  /** 帶 query string 的目標路徑，例如 `/admin?tab=users` */
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  onClick?: () => void;
+};
+
+/**
+ * Sidebar 用的 admin NavLink（issue #23）
+ *
+ * 不能直接用 react-router 的 NavLink isActive 判斷，因為兩個 link 都指向
+ * `/admin`、僅 `?tab=` 不同；NavLink 只看 pathname。這裡用 useLocation 抓
+ * 當前 search 比對 tab 參數。HashRouter 下 location.pathname 與 location.search
+ * 都會反映 `#/admin?tab=...`，行為等同 BrowserRouter。
+ */
+const AdminNavLink = ({ to, icon: Icon, label, onClick }: TAdminNavLinkProps) => {
+  const location = useLocation();
+  // to 形如 '/admin?tab=users'；splitIdx 為 '?' 位置
+  const qIdx = to.indexOf('?');
+  const toPath = qIdx >= 0 ? to.slice(0, qIdx) : to;
+  const toQuery = qIdx >= 0 ? to.slice(qIdx + 1) : '';
+  const toParams = new URLSearchParams(toQuery);
+  const currentParams = new URLSearchParams(location.search);
+  // 同 path + tab 參數一致 → active
+  const isActive =
+    location.pathname === toPath && currentParams.get('tab') === toParams.get('tab');
+  return (
+    <Link
+      to={to}
+      onClick={onClick}
+      className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
+        isActive
+          ? 'bg-[--color-primary-50] font-semibold text-[--color-brand]'
+          : 'text-[--color-text-secondary] hover:bg-[--color-surface-overlay]'
+      }`}
+      aria-current={isActive ? 'page' : undefined}
+    >
+      <Icon size={18} strokeWidth={2} />
+      {label}
+    </Link>
+  );
 };
 
 type TRepoNavItemProps = {
@@ -128,6 +186,7 @@ const Sidebar = ({
   hiddenRepos,
   pinnedRepos,
   onTogglePin,
+  isAdmin = false,
   isOpen = false,
   onClose,
 }: TSidebarProps) => {
@@ -208,6 +267,34 @@ const Sidebar = ({
           <LayoutDashboard size={18} strokeWidth={2} />
           總覽
         </NavLink>
+
+        {/*
+         * Admin 專用區段（issue #23）：使用者列表 / 待審核 Issue
+         * - 一般使用者一律不渲染（前端 + 後端 AdminGuard 雙層保護）
+         * - 直接指向既有 AdminPage 的 tab，URL 為 hash router 下 `/admin?tab=...`
+         * - 兩個 NavLink 用 useMatch 的方式判斷 active 比較複雜，這裡用 className 函式
+         *   讀 isActive 但因為 hash router 的 search param 切換不會改 pathname，
+         *   兩個 link 在 /admin 路徑下會同時 active —— 改用 location 比對 search
+         */}
+        {isAdmin && (
+          <>
+            <div className="mt-3 mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-[--color-text-muted]">
+              管理員
+            </div>
+            <AdminNavLink
+              to="/admin?tab=users"
+              icon={Users}
+              label="使用者列表"
+              onClick={handleNavClick}
+            />
+            <AdminNavLink
+              to="/admin?tab=issues"
+              icon={Inbox}
+              label="待審核 Issue"
+              onClick={handleNavClick}
+            />
+          </>
+        )}
 
         <div className="relative mt-3">
           <Search

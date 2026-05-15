@@ -288,6 +288,10 @@ const AppShell = () => {
             hiddenRepos={hiddenRepos}
             pinnedRepos={pinnedRepos}
             onTogglePin={togglePinnedRepo}
+            isAdmin={
+              session.state.status === 'authenticated' &&
+              session.state.user.role === 'admin'
+            }
             isOpen={isSidebarOpen}
             onClose={closeSidebar}
           />

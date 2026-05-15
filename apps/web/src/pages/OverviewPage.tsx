@@ -16,7 +16,6 @@ import type { OverviewIssueLite, RepoSummary } from 'shared';
 import type { TAppShellContext } from '../AppShell';
 import CompletionBarChart from '../charts/CompletionBarChart';
 import StatusDonutChart from '../charts/StatusDonutChart';
-import UserRoleTable from '../components/admin/UserRoleTable';
 import EmptyState from '../components/EmptyState';
 import PageHeader from '../components/PageHeader';
 import ProgressBar from '../components/ProgressBar';
@@ -44,11 +43,8 @@ const activityOf = (r: RepoSummary): number =>
  *   - 把原本的 RepoCard grid 改為列表式（RepoListRow），每列含近 7 天動能
  */
 const OverviewPage = () => {
-  const { summary, hiddenRepos, pinnedRepos, togglePinnedRepo, session } =
+  const { summary, hiddenRepos, pinnedRepos, togglePinnedRepo } =
     useOutletContext<TAppShellContext>();
-
-  const isAdmin =
-    session.state.status === 'authenticated' && session.state.user.role === 'admin';
 
   /** 卡片 grid 用：顯示所有可見 repo（issue #16）*/
   const visibleRepos = useMemo(() => {
@@ -225,13 +221,9 @@ const OverviewPage = () => {
       )}
 
       {/*
-       * 使用者管理（issue #16）—— 僅 admin 看得到。
+       * 使用者管理（issue #16）原本嵌在這裡；issue #23 把入口移到 Sidebar 的
+       * 「管理員 → 使用者列表」（/admin?tab=users），總覽頁不再嵌入該區塊。
        */}
-      {isAdmin && (
-        <div className="mt-8">
-          <UserRoleTable />
-        </div>
-      )}
     </>
   );
 };
