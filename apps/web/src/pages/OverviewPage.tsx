@@ -72,17 +72,21 @@ const OverviewPage = () => {
   }, [visibleRepos]);
 
   // Donut 用的狀態分布：透過 summary.totals 推導
+  // issue #27：原本只有「已完成 / 進行中 / 逾期」三段（皆 roadmap 計數），未掛 milestone
+  // 的 repo 不會出現。改為新增第 4 段「未建立 Roadmap」(repo 計數)，讓使用者看到全貌。
+  // 兩種單位混合：前 3 段是 roadmap、第 4 段是 repo，圖元件的 center label 已說明。
   const donutData = useMemo(() => {
-    if (!summary) return { done: 0, inProgress: 0, overdue: 0, noDue: 0 };
+    if (!summary) {
+      return { done: 0, inProgress: 0, overdue: 0, noRoadmap: 0 };
+    }
     const done = summary.totals.closedRoadmaps;
     const overdue = summary.totals.overdueRoadmaps;
-    // openRoadmaps 包含 overdue 與 in_progress 與 no_due；
-    // 在 summary 層級我們無法精確區分 in_progress vs no_due，
-    // 所以將非 overdue 的 open 視為 in_progress（no_due 顯示為 0）。
-    // 這是 summary 的精度限制，RoadmapPage 會用 detail 精確分類。
+    // openRoadmaps 包含 overdue 與 in_progress；summary 層級無法精確區分 in_progress
+    // vs no_due，所以將非 overdue 的 open 視為 in_progress（既有行為，未動）
     const inProgress = Math.max(0, summary.totals.openRoadmaps - overdue);
-    return { done, inProgress, overdue, noDue: 0 };
-  }, [summary]);
+    const noRoadmap = visibleRepos.filter((r) => r.roadmapCount === 0).length;
+    return { done, inProgress, overdue, noRoadmap };
+  }, [summary, visibleRepos]);
 
   /**
    * issue #24：當 admin 把某些 repo 設為 hidden 時，後端 summary 的兩個列表仍然會包含
@@ -168,7 +172,7 @@ const OverviewPage = () => {
               Roadmap 狀態分布
             </h2>
             <p className="text-xs text-[--color-text-muted]">
-              所有 repo 中的 roadmap 完成/進行/逾期比例
+              Roadmap 完成 / 進行中 / 逾期 + 未建立 Roadmap 的 repo（issue #27）
             </p>
           </div>
           <StatusDonutChart {...donutData} />
