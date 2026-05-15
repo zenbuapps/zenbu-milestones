@@ -5,6 +5,7 @@ import {
   EyeOff,
   FilePlus2,
   Inbox,
+  Loader2,
   Lock,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -13,12 +14,15 @@ import type { TAppShellContext } from '../AppShell';
 import EmptyState from '../components/EmptyState';
 import IssueSubmitDialog from '../components/IssueSubmitDialog';
 import IssueSubmitForm from '../components/IssueSubmitForm';
-import LoadingSpinner from '../components/LoadingSpinner';
 import RoadmapTimeline from '../components/RoadmapTimeline';
 import PageHeader from '../components/PageHeader';
 import RepoIssueList from '../components/RepoIssueList';
 import RequireAuthGate from '../components/RequireAuthGate';
 import { ApiError, fetchRepoDetail } from '../data/api';
+import {
+  getCachedRepoDetail,
+  setCachedRepoDetail,
+} from '../data/repoDetailCache';
 import type { RepoDetail } from 'shared';
 import { formatDate } from '../utils/date';
 
@@ -45,10 +49,20 @@ const RoadmapPage = () => {
   const isHidden = name ? hiddenRepos.has(name) : false;
   const isNonSubmittable = name ? nonSubmittableRepos.has(name) : false;
 
-  const [detail, setDetail] = useState<RepoDetail | null>(null);
+  /**
+   * issue #26：客戶端 stale-while-revalidate
+   * - 初始 state 直接讀快取，避免切回看過的 repo 時還閃過 null + spinner
+   * - useEffect 不再無條件 setDetail(null)；有快取就保留畫面，
+   *   背景 fetch 完成才覆蓋資料；失敗時保留舊資料、僅 console 警告
+   */
+  const [detail, setDetail] = useState<RepoDetail | null>(() =>
+    name ? getCachedRepoDetail(DEFAULT_REPO_OWNER, name) ?? null : null,
+  );
   const [error, setError] = useState<Error | null>(null);
   /** 後端明確告知需要登入（HTTP 401）；與一般錯誤分流 */
   const [needsAuth, setNeedsAuth] = useState<boolean>(false);
+  /** SWR 背景重新驗證旗標；用來在 PageHeader 旁顯示一個 small spinner */
+  const [isRevalidating, setIsRevalidating] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFormDirty, setIsFormDirty] = useState(false);
 
@@ -72,12 +86,25 @@ const RoadmapPage = () => {
     }
 
     let cancelled = false;
-    setDetail(null);
+    const cached = getCachedRepoDetail(DEFAULT_REPO_OWNER, name);
     setError(null);
     setNeedsAuth(false);
+    if (cached) {
+      // 有快取：先把畫面切到該 repo 的舊資料（即使 name 變動），
+      // 接著背景重打 API 更新；避免「切回剛看過的 repo 還閃 loading」
+      setDetail(cached);
+      setIsRevalidating(true);
+    } else {
+      // Cold load：清空舊 detail，讓下方 skeleton 接手；不再用置中 spinner
+      setDetail(null);
+      setIsRevalidating(false);
+    }
+
     fetchRepoDetail(DEFAULT_REPO_OWNER, name)
       .then((data) => {
-        if (!cancelled) setDetail(data);
+        if (cancelled) return;
+        setCachedRepoDetail(DEFAULT_REPO_OWNER, name, data);
+        setDetail(data);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -85,7 +112,18 @@ const RoadmapPage = () => {
           setNeedsAuth(true);
           return;
         }
-        setError(err instanceof Error ? err : new Error(String(err)));
+        // 有快取就保留畫面（SWR 失敗也不該整片清掉），只 console 警告
+        if (cached) {
+          console.warn(
+            `[RoadmapPage] 背景重新整理 ${name} 失敗，保留快取畫面：`,
+            err,
+          );
+        } else {
+          setError(err instanceof Error ? err : new Error(String(err)));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsRevalidating(false);
       });
     return () => {
       cancelled = true;
@@ -116,11 +154,7 @@ const RoadmapPage = () => {
   }
 
   if (!detail) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
+    return <RoadmapPageSkeleton onBack={() => navigate('/')} />;
   }
 
   // Hidden repo 對非 admin 一律隱藏（即使深連結也擋掉）；admin 仍可瀏覽
@@ -165,6 +199,15 @@ const RoadmapPage = () => {
             {detail.name}
             {detail.isPrivate && (
               <Lock size={14} strokeWidth={2} className="text-[--color-text-muted]" />
+            )}
+            {isRevalidating && (
+              <span
+                className="inline-flex items-center gap-1 text-[11px] font-normal text-[--color-text-muted]"
+                title="背景更新中"
+              >
+                <Loader2 size={12} strokeWidth={2} className="animate-spin" />
+                更新中
+              </span>
             )}
           </span>
         }
@@ -276,6 +319,50 @@ const InfoCell = ({ label, value }: TInfoCellProps) => (
     <span className="text-xs font-medium text-[--color-text-muted]">{label}</span>
     <span className="mt-0.5 text-sm font-semibold text-[--color-text-primary]">{value}</span>
   </div>
+);
+
+/**
+ * Cold-load 用 skeleton：保留 RoadmapPage 既有 layout（返回鈕 + 頁首 +
+ * 資訊列 + 時間軸區塊），把內容換成灰色 placeholder，避免使用者第一次
+ * 進新 repo 看到的是大片空白 + 置中 spinner。issue #26 驗收條件之一。
+ */
+const RoadmapPageSkeleton = ({ onBack }: { onBack: () => void }) => (
+  <>
+    <button
+      type="button"
+      onClick={onBack}
+      className="btn-ghost mb-4 -ml-3"
+    >
+      <ArrowLeft size={15} strokeWidth={2} /> 返回總覽
+    </button>
+
+    {/* 頁首 skeleton */}
+    <div className="mb-6 flex flex-col gap-2">
+      <div className="h-7 w-48 animate-pulse rounded bg-[--color-surface-overlay]" />
+      <div className="h-4 w-72 animate-pulse rounded bg-[--color-surface-overlay]" />
+    </div>
+
+    {/* 資訊列 4 格 */}
+    <div className="card mb-6 grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-5 md:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="flex flex-col gap-1">
+          <div className="h-3 w-12 animate-pulse rounded bg-[--color-surface-overlay]" />
+          <div className="h-5 w-20 animate-pulse rounded bg-[--color-surface-overlay]" />
+        </div>
+      ))}
+    </div>
+
+    {/* 時間軸 skeleton：3 條 placeholder */}
+    <div className="flex flex-col gap-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} className="card flex flex-col gap-2 p-4">
+          <div className="h-5 w-1/2 animate-pulse rounded bg-[--color-surface-overlay]" />
+          <div className="h-3 w-1/3 animate-pulse rounded bg-[--color-surface-overlay]" />
+          <div className="mt-1 h-2 w-full animate-pulse rounded-full bg-[--color-surface-overlay]" />
+        </div>
+      ))}
+    </div>
+  </>
 );
 
 export default RoadmapPage;

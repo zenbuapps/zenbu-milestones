@@ -34,6 +34,7 @@ import RepoSettingsTable from '../components/admin/RepoSettingsTable';
 import UserRoleTable from '../components/admin/UserRoleTable';
 import { useToast } from '../components/Toast/useToast';
 import { ApiError, refreshAdminData } from '../data/api';
+import { invalidateAllRepoDetails } from '../data/repoDetailCache';
 
 /** 可用分頁識別 */
 type TAdminTab = 'issues' | 'repos' | 'users';
@@ -192,6 +193,9 @@ const RefreshDataButton = () => {
     setIsPending(true);
     try {
       await refreshAdminData();
+      // issue #26：admin 強制清後端 cache 後，也把前端 repo detail 快取一併清掉，
+      // 避免使用者立刻切回某個 repo 仍看到舊資料
+      invalidateAllRepoDetails();
       showToast({
         type: 'success',
         message: '已清除快取，下次載入會重新抓取最新資料',

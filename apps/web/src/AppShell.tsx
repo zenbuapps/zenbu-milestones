@@ -16,6 +16,7 @@ import {
   pinRepo as apiPinRepo,
   unpinRepo as apiUnpinRepo,
 } from './data/api';
+import { invalidateAllRepoDetails } from './data/repoDetailCache';
 import type { Summary } from 'shared';
 import { useSession, type UseSessionResult } from './hooks/useSession';
 
@@ -96,6 +97,9 @@ const AppShell = () => {
   const refreshSummary = useCallback(async () => {
     if (sessionStatus !== 'authenticated') return;
     setIsRefreshingSummary(true);
+    // issue #26：使用者按「重新整理」應強制清掉客戶端 repo detail 快取，
+    // 否則切回看過的 repo 仍會吃舊資料
+    invalidateAllRepoDetails();
     try {
       const data = await fetchSummary();
       setSummary(data);
