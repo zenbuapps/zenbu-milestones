@@ -145,6 +145,26 @@ export const UPLOAD_IMAGE_ALLOWED_MIME = [
 ] as const;
 export type UploadImageMime = (typeof UPLOAD_IMAGE_ALLOWED_MIME)[number];
 
+/**
+ * 稽核 log 的 target 資訊（issue #25）
+ * - 後端在列出 audit log 時 join Issue / User table，把人類可讀的標題與
+ *   連結資料一併吐回；前端據此渲染可點擊的 issue 標題、user email 等
+ * - issue 對應的紀錄若已 hard-delete（withdraw 流程），各欄位 fallback 自 payload
+ *   仍取不到時為 null（前端顯示 fallback 文字）
+ */
+export type AuditLogTarget =
+  | {
+      kind: 'issue';
+      title: string | null;
+      githubIssueNumber: number | null;
+      githubIssueUrl: string | null;
+      repoOwner: string | null;
+      repoName: string | null;
+    }
+  | { kind: 'user'; email: string | null; displayName: string | null }
+  | { kind: 'repo'; repoOwner: string; repoName: string }
+  | { kind: 'other'; label: string };
+
 /** 稽核 log 單筆 */
 export interface AuditLogRow {
   id: string;
@@ -152,6 +172,8 @@ export interface AuditLogRow {
   actor: { id: string; email: string; displayName: string };
   targetType: string;
   targetId: string;
+  /** 由後端 join 後填入，前端據此渲染人類可讀的目標（issue #25）*/
+  target: AuditLogTarget;
   payload: unknown;
   createdAt: string;
 }

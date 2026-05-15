@@ -15,7 +15,7 @@
 import { AlertTriangle, ChevronDown, ChevronUp, RefreshCw, ScrollText, Shield, User } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import type { AdminUserRow, AuditLogRow, UserRole } from 'shared';
+import type { AdminUserRow, AuditLogRow, AuditLogTarget, UserRole } from 'shared';
 import type { TAppShellContext } from '../../AppShell';
 import {
   ApiError,
@@ -441,9 +441,8 @@ const AuditLogItem = ({ log }: { log: AuditLogRow }) => {
             <span className="rounded bg-[--color-surface-overlay] px-1.5 py-0.5 font-mono text-[10px] text-[--color-text-secondary]">
               {actionLabel}
             </span>
-            <span className="text-[--color-text-muted]">
-              · 對象 {log.targetType}:{log.targetId}
-            </span>
+            <span className="text-[--color-text-muted]">·</span>
+            <AuditTargetView target={log.target} targetType={log.targetType} targetId={log.targetId} />
           </div>
           <time dateTime={log.createdAt} className="mt-1 block text-[11px] text-[--color-text-muted]">
             {formatTimeAgo(log.createdAt)}
@@ -469,6 +468,62 @@ const AuditLogItem = ({ log }: { log: AuditLogRow }) => {
         </pre>
       )}
     </li>
+  );
+};
+
+type TAuditTargetViewProps = {
+  target: AuditLogTarget;
+  /** fallback：target.kind === 'other' 或欄位全空時用來顯示原始 type:id 字串 */
+  targetType: string;
+  targetId: string;
+};
+
+/**
+ * 稽核紀錄的目標顯示（issue #25）
+ * - issue：顯示「owner/name · title · #number」；若有 githubIssueUrl 則整段可點
+ * - user：顯示 email（或 displayName）
+ * - repo：顯示 owner/name
+ * - other 或缺資料：fallback 原 `type:id`
+ */
+const AuditTargetView = ({ target, targetType, targetId }: TAuditTargetViewProps) => {
+  if (target.kind === 'issue') {
+    const parts: string[] = [];
+    if (target.repoOwner && target.repoName) {
+      parts.push(`${target.repoOwner}/${target.repoName}`);
+    }
+    if (target.title) parts.push(target.title);
+    if (target.githubIssueNumber !== null) parts.push(`#${target.githubIssueNumber}`);
+    const label = parts.length > 0 ? parts.join(' · ') : `issue ${targetId}`;
+    if (target.githubIssueUrl) {
+      return (
+        <a
+          href={target.githubIssueUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[--color-brand] hover:underline"
+        >
+          {label}
+        </a>
+      );
+    }
+    return <span className="text-[--color-text-secondary]">{label}</span>;
+  }
+  if (target.kind === 'user') {
+    const label = target.email ?? target.displayName ?? `user ${targetId}`;
+    return <span className="text-[--color-text-secondary]">{label}</span>;
+  }
+  if (target.kind === 'repo') {
+    return (
+      <span className="text-[--color-text-secondary]">
+        {`${target.repoOwner}/${target.repoName}`}
+      </span>
+    );
+  }
+  // other / 未知 type
+  return (
+    <span className="text-[--color-text-muted]">
+      {target.kind === 'other' ? target.label : `${targetType}:${targetId}`}
+    </span>
   );
 };
 
