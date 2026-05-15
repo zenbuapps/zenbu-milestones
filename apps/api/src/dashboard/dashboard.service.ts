@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type {
   IssueLite,
+  OverviewIssueLite,
   Roadmap,
   RoadmapIssuesPage,
   RepoDetail,
@@ -27,6 +28,15 @@ const SENSITIVE_LABELS = new Set(['confidential', 'security', 'internal-only']);
 /** 預設並發上限；與舊 fetch-data.ts 的 p-limit 設定對齊。 */
 const REPO_CONCURRENCY = 5;
 const ISSUE_CONCURRENCY = 8;
+
+/**
+ * issue #24：定義「近期活躍」的時間窗。
+ * 7 天為預設；改動時請同步更新 RepoSummary.recentOpenedCount 的註解、
+ * Summary.recentClosedIssues 的篩選條件，以及前端 OverviewPage 的文案。
+ */
+const ACTIVITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+/** issue #24：總覽頁 issue 列表的長度上限（最近完成 / 等待最久） */
+const OVERVIEW_ISSUE_LIST_LIMIT = 5;
 
 /** Cache key builders —— 統一於此，方便 refresh-data 以 prefix 清除。 */
 export const CacheKeys = {
@@ -254,10 +264,40 @@ export class DashboardService {
       closedIssues: allRepoSummaries.reduce((s, r) => s + r.closedIssues, 0),
     };
 
+    // issue #24：跨 repo 聚合「最近完成的 issue」與「等待最久的 open issue」兩份列表。
+    // 直接拿 bundle.detail.allIssues（已過濾 PR / SENSITIVE_LABELS）攤平，附上 repo 資訊。
+    const cutoff = Date.now() - ACTIVITY_WINDOW_MS;
+    const recentClosedIssues: OverviewIssueLite[] = [];
+    const openIssuesAll: OverviewIssueLite[] = [];
+    for (const r of results) {
+      const owner = this.org;
+      const name = r.detail.name;
+      for (const issue of r.detail.allIssues) {
+        if (issue.state === 'closed' && issue.closedAt) {
+          const closedTs = Date.parse(issue.closedAt);
+          if (!Number.isNaN(closedTs) && closedTs >= cutoff) {
+            recentClosedIssues.push({ ...issue, repoOwner: owner, repoName: name });
+          }
+        } else if (issue.state === 'open') {
+          openIssuesAll.push({ ...issue, repoOwner: owner, repoName: name });
+        }
+      }
+    }
+    recentClosedIssues.sort((a, b) => {
+      const aTs = a.closedAt ? Date.parse(a.closedAt) : 0;
+      const bTs = b.closedAt ? Date.parse(b.closedAt) : 0;
+      return bTs - aTs;
+    });
+    openIssuesAll.sort(
+      (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt),
+    );
+
     return {
       generatedAt: new Date().toISOString(),
       totals,
       repos: allRepoSummaries,
+      recentClosedIssues: recentClosedIssues.slice(0, OVERVIEW_ISSUE_LIST_LIMIT),
+      oldestOpenIssues: openIssuesAll.slice(0, OVERVIEW_ISSUE_LIST_LIMIT),
     };
   }
 
@@ -359,14 +399,31 @@ export class DashboardService {
     // 反映 GitHub UI 上的真實 issue 狀況。allIssuesRaw 為未經 SENSITIVE_LABELS 過濾的
     // 原始 GitHub issue 陣列，與 GitHub UI 顯示一致。前端「Open Issues / Closed Issues」
     // 統計也將同步包含未掛 milestone 的部分。
+    //
+    // issue #24：同一輪迴也算「近 7 天動能」—— recentOpenedCount / recentClosedCount。
+    // 用同一個 cutoff 變數避免重複呼叫 Date.now()。
+    const cutoff = Date.now() - ACTIVITY_WINDOW_MS;
     let openIssues = 0;
     let closedIssues = 0;
+    let recentOpenedCount = 0;
+    let recentClosedCount = 0;
     for (const issue of allIssuesRaw) {
       // listAllRepoIssues 可能同時帶 PR；PR 在 detail.allIssues 已被 toIssueLite 過濾，
       // 此處同樣排除以避免把 PR 算入 issue 計數
       if ((issue as { pull_request?: unknown }).pull_request) continue;
       if (issue.state === 'open') openIssues += 1;
       else if (issue.state === 'closed') closedIssues += 1;
+
+      const createdTs = Date.parse(issue.created_at);
+      if (!Number.isNaN(createdTs) && createdTs >= cutoff) {
+        recentOpenedCount += 1;
+      }
+      if (issue.state === 'closed' && issue.closed_at) {
+        const closedTs = Date.parse(issue.closed_at);
+        if (!Number.isNaN(closedTs) && closedTs >= cutoff) {
+          recentClosedCount += 1;
+        }
+      }
     }
     const nextDue = openMs
       .filter((m): m is Roadmap & { dueOn: string } => !!m.dueOn)
@@ -388,6 +445,8 @@ export class DashboardService {
       completionRate: computeCompletion(openIssues, closedIssues),
       openIssues,
       closedIssues,
+      recentOpenedCount,
+      recentClosedCount,
       nextDueRoadmap: nextDue
         ? {
             number: nextDue.number,

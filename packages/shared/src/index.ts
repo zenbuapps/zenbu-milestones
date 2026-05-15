@@ -227,6 +227,10 @@ export interface RepoSummary {
   openIssues: number;
   /** issue #16：該 repo 的全部 closed issues（不限掛 milestone）；排除 PR */
   closedIssues: number;
+  /** issue #24：近 7 天新開的 issue 數（createdAt >= now - 7d）；排除 PR */
+  recentOpenedCount: number;
+  /** issue #24：近 7 天關閉的 issue 數（closedAt >= now - 7d 且 state=closed）；排除 PR */
+  recentClosedCount: number;
   /** null 代表沒有「未來到期」的 roadmap */
   nextDueRoadmap: NextDueRoadmap | null;
 }
@@ -240,6 +244,15 @@ export interface NextDueRoadmap {
   htmlUrl: string;
 }
 
+/**
+ * 總覽頁列表用 issue 摘要（issue #24）
+ * IssueLite 沒帶 repo 資訊；列表跨 repo 顯示必須額外攜帶 repoOwner / repoName 才能定位
+ */
+export interface OverviewIssueLite extends IssueLite {
+  repoOwner: string;
+  repoName: string;
+}
+
 /** `GET /api/summary` response / 舊 summary.json 的形狀 */
 export interface Summary {
   /** ISO 8601，snapshot 產生時間 */
@@ -247,6 +260,10 @@ export interface Summary {
   totals: Totals;
   /** 排序：roadmapCount > 0 的優先，其次以 name.localeCompare() 字母序 */
   repos: RepoSummary[];
+  /** issue #24：跨 repo 最近 7 天內關閉的 issue，最多 5 筆，依 closedAt desc */
+  recentClosedIssues: OverviewIssueLite[];
+  /** issue #24：跨 repo 目前 open 中最古老的 issue，最多 5 筆，依 createdAt asc */
+  oldestOpenIssues: OverviewIssueLite[];
 }
 
 /** Issue 的 label（色碼為 6 位 hex，無 `#` 前綴，預設 '888888'） */
