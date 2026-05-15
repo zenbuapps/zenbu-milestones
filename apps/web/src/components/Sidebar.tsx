@@ -32,6 +32,21 @@ const pinKey = (owner: string, name: string): string => `${owner}/${name}`;
 const sortByName = (a: RepoSummary, b: RepoSummary): number =>
   a.name.localeCompare(b.name);
 
+/**
+ * 依 open issue 數量回對應的 badge 樣式（issue #18）
+ * - 0：中性灰（避免畫面整片紅）
+ * - 1–5：輕度（綠）
+ * - 6–10：中度（橘）
+ * - ≥ 11：嚴重（紅）
+ * 色票沿用既有 design system 既有用法（StatCard / IssueStatusBadge 已用過這幾組）
+ */
+const badgeClassesForOpenIssues = (count: number): string => {
+  if (count <= 0) return 'bg-[--color-surface-overlay] text-[--color-text-muted]';
+  if (count <= 5) return 'bg-green-50 text-green-700';
+  if (count <= 10) return 'bg-orange-50 text-orange-700';
+  return 'bg-red-50 text-red-700';
+};
+
 type TRepoNavItemProps = {
   repo: RepoSummary;
   pinned: boolean;
@@ -70,8 +85,16 @@ const RepoNavItem = ({ repo, pinned, onTogglePin, onNavClick }: TRepoNavItemProp
         <span className="truncate">{repo.name}</span>
       </span>
       <span className="flex flex-shrink-0 items-center gap-1">
-        <span className="rounded-full bg-[--color-surface-overlay] px-1.5 py-0.5 text-[10px] font-medium text-[--color-text-muted]">
-          {repo.roadmapCount}
+        {/*
+         * issue #18：badge 改顯示 open issue 數，並依「全 GitHub open issue 計數」
+         * 套警示色階（0 中性 / 1–5 綠 / 6–10 橘 / ≥11 紅）。
+         * title 揭示完整含義，避免使用者誤以為這是 roadmap 數。
+         */}
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${badgeClassesForOpenIssues(repo.openIssues)}`}
+          title={`${repo.openIssues} open issues · ${repo.roadmapCount} roadmaps`}
+        >
+          {repo.openIssues}
         </span>
         <button
           type="button"
