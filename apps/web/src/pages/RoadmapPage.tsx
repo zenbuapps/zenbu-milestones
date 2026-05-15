@@ -1,15 +1,17 @@
 import {
   AlertOctagon,
   ArrowLeft,
+  CircleDot,
   ExternalLink,
   EyeOff,
   FilePlus2,
   Inbox,
   Loader2,
   Lock,
+  Milestone as RoadmapIcon,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
 import type { TAppShellContext } from '../AppShell';
 import EmptyState from '../components/EmptyState';
 import IssueSubmitDialog from '../components/IssueSubmitDialog';
@@ -30,6 +32,11 @@ import { formatDate } from '../utils/date';
 // shared 的 RepoDetail 也沒有 owner 欄位。當未來真正支援跨 org 時，
 // 需同步：DashboardService 產出 owner、packages/shared 新增 owner 欄位、此處改讀 detail.owner。
 const DEFAULT_REPO_OWNER = 'zenbuapps';
+
+/** issue #21：RoadmapPage 兩個頁籤 */
+type TRepoTab = 'issues' | 'roadmaps';
+const parseRepoTab = (raw: string | null): TRepoTab =>
+  raw === 'roadmaps' ? 'roadmaps' : 'issues';
 
 /**
  * 單一 repo 的 Roadmap 頁
@@ -65,6 +72,23 @@ const RoadmapPage = () => {
   const [isRevalidating, setIsRevalidating] = useState<boolean>(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isFormDirty, setIsFormDirty] = useState(false);
+
+  // issue #21：頁籤狀態存 URL ?tab=（預設 'issues'）；
+  // 兩個 panel 都保持 mounted、用 hidden 切換，確保 RepoIssueList 的
+  // filter / 分頁狀態切頁不會被重置
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = parseRepoTab(searchParams.get('tab'));
+  const setTab = (next: TRepoTab): void => {
+    const params = new URLSearchParams(searchParams);
+    if (next === 'issues') {
+      params.delete('tab');
+    } else {
+      params.set('tab', next);
+    }
+    // replace=true 避免使用者每次點頁籤都在歷史紀錄塞一筆 — 與 AdminPage
+    // 不同的選擇，因為這裡的頁籤更像「同一頁的視圖切換」
+    setSearchParams(params, { replace: true });
+  };
 
   const sessionStatus = session.state.status;
 
@@ -259,25 +283,54 @@ const RoadmapPage = () => {
         </div>
       )}
 
-      {/* 資訊列 */}
-      <div className="card mb-6 grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-5 md:grid-cols-4">
-        <InfoCell label="語言" value={detail.language ?? '—'} />
-        <InfoCell label="最後更新" value={formatDate(detail.updatedAt)} />
-        <InfoCell label="總 Roadmaps" value={String(total)} />
-        <InfoCell label="完成率" value={`${completionPct}%`} />
+      {/* 頁籤列（issue #21）：Issues / Roadmaps，預設 Issues */}
+      <div className="mb-4 border-b border-[--color-border]">
+        <div className="-mb-px flex gap-1 overflow-x-auto" role="tablist">
+          <TabButton
+            active={tab === 'issues'}
+            onClick={() => setTab('issues')}
+            icon={CircleDot}
+            label="Issues"
+            badge={detail.allIssues.length}
+          />
+          <TabButton
+            active={tab === 'roadmaps'}
+            onClick={() => setTab('roadmaps')}
+            icon={RoadmapIcon}
+            label="Roadmaps"
+            badge={total}
+          />
+        </div>
       </div>
 
-      {total === 0 ? (
-        <EmptyState
-          icon={Inbox}
-          title="此 repo 尚未建立任何 roadmap"
-          description="在 GitHub 上為 repo 建立 roadmap 後，會自動出現在這裡。"
-        />
-      ) : (
-        <RoadmapTimeline roadmaps={detail.roadmaps} />
-      )}
+      {/*
+       * 兩個 panel 都保持 mount，只用 hidden 切換顯示。
+       * 這樣 RepoIssueList 內部的 query / pageSize / page state 切頁籤不會消失（驗收條件之一）。
+       * `hidden` 屬性比 CSS display:none 更語意化、a11y 友善（aria-hidden 自動帶到）。
+       */}
+      <div hidden={tab !== 'issues'} role="tabpanel" aria-label="Issues">
+        <RepoIssueList detail={detail} />
+      </div>
 
-      <RepoIssueList detail={detail} />
+      <div hidden={tab !== 'roadmaps'} role="tabpanel" aria-label="Roadmaps">
+        {/* 資訊列（原本鋪在頁面頂端，issue #21 收進 Roadmaps 頁籤） */}
+        <div className="card mb-6 grid grid-cols-2 gap-3 p-4 sm:gap-4 sm:p-5 md:grid-cols-4">
+          <InfoCell label="語言" value={detail.language ?? '—'} />
+          <InfoCell label="最後更新" value={formatDate(detail.updatedAt)} />
+          <InfoCell label="總 Roadmaps" value={String(total)} />
+          <InfoCell label="完成率" value={`${completionPct}%`} />
+        </div>
+
+        {total === 0 ? (
+          <EmptyState
+            icon={Inbox}
+            title="此 repo 尚未建立任何 roadmap"
+            description="在 GitHub 上為 repo 建立 roadmap 後，會自動出現在這裡。"
+          />
+        ) : (
+          <RoadmapTimeline roadmaps={detail.roadmaps} />
+        )}
+      </div>
 
       {/* Issue 提交對話框：只在有 repo name 且已登入時 mount，避免干擾 hook 順序 */}
       {canSubmitIssue && name && (
@@ -319,6 +372,48 @@ const InfoCell = ({ label, value }: TInfoCellProps) => (
     <span className="text-xs font-medium text-[--color-text-muted]">{label}</span>
     <span className="mt-0.5 text-sm font-semibold text-[--color-text-primary]">{value}</span>
   </div>
+);
+
+type TTabButtonProps = {
+  active: boolean;
+  onClick: () => void;
+  icon: typeof CircleDot;
+  label: string;
+  badge?: number;
+};
+
+/**
+ * RoadmapPage 頁籤按鈕（issue #21）
+ * - active：底線 + brand 色
+ * - inactive：muted 色 + hover 反白
+ * - badge：右側淡灰圓形數字（issue / roadmap 總數），可有可無
+ */
+const TabButton = ({ active, onClick, icon: Icon, label, badge }: TTabButtonProps) => (
+  <button
+    type="button"
+    role="tab"
+    aria-selected={active}
+    onClick={onClick}
+    className={`relative -mb-px inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition-colors ${
+      active
+        ? 'border-[--color-brand] font-semibold text-[--color-brand]'
+        : 'border-transparent text-[--color-text-muted] hover:text-[--color-text-secondary]'
+    }`}
+  >
+    <Icon size={14} strokeWidth={2} />
+    {label}
+    {typeof badge === 'number' && (
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+          active
+            ? 'bg-[--color-primary-50] text-[--color-brand]'
+            : 'bg-[--color-surface-overlay] text-[--color-text-muted]'
+        }`}
+      >
+        {badge}
+      </span>
+    )}
+  </button>
 );
 
 /**
