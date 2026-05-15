@@ -154,14 +154,21 @@ const RepoNavItem = ({ repo, pinned, onTogglePin, onNavClick }: TRepoNavItemProp
         >
           {repo.openIssues}
         </span>
+        {/*
+         * issue #20：兩種狀態都預設隱藏星星，整列 hover 或 button focus 時才顯現。
+         * - pinned 仍維持 brand 藍（hover 後就會看到「藍色星星」可點以取消釘選）
+         * - 未釘選為灰星（hover 後出現提示可點以釘選）
+         * 透過 `opacity-0 group-hover:opacity-100 focus:opacity-100` 統一控制顯示時機
+         * 整列的 group hover class 已掛在外層 NavLink 上
+         */}
         <button
           type="button"
           onClick={handleStarClick}
           aria-label={pinned ? `取消釘選 ${repo.name}` : `釘選 ${repo.name}`}
           aria-pressed={pinned}
           title={pinned ? '取消釘選' : '釘選'}
-          className={`rounded p-1 transition-colors hover:bg-[--color-surface-overlay] ${
-            pinned ? 'text-[--color-brand]' : 'text-[--color-text-muted] opacity-0 group-hover:opacity-100 focus:opacity-100'
+          className={`rounded p-1 opacity-0 transition-colors hover:bg-[--color-surface-overlay] group-hover:opacity-100 focus:opacity-100 ${
+            pinned ? 'text-[--color-brand]' : 'text-[--color-text-muted]'
           }`}
         >
           <Star size={12} strokeWidth={2} fill={pinned ? 'currentColor' : 'none'} />
