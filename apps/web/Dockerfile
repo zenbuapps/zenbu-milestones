@@ -1,4 +1,6 @@
-FROM node:22-slim AS build
+# 改用 Amazon ECR 的 docker hub 鏡像（無匿名 pull 速率限制），避開 GH Actions
+# 共用 IP 一直撞 docker.io 429 toomanyrequests。內容與 docker.io 同源。
+FROM public.ecr.aws/docker/library/node:22-slim AS build
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /app
 
@@ -14,7 +16,7 @@ ARG VITE_API_BASE_URL=""
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN pnpm build:shared && pnpm build:web
 
-FROM nginx:alpine
+FROM public.ecr.aws/docker/library/nginx:alpine
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

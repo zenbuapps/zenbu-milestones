@@ -1,4 +1,6 @@
-FROM node:22-slim
+# 改用 Amazon ECR 的 docker hub 鏡像（無匿名 pull 速率限制），避開 GH Actions 共用 IP
+# 一直撞 docker.io 429 toomanyrequests。內容與 docker.io/library/node:22-slim 同源。
+FROM public.ecr.aws/docker/library/node:22-slim
 RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /app
