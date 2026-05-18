@@ -300,7 +300,9 @@ const RoadmapPage = () => {
             onClick={() => setTab('issues')}
             icon={CircleDot}
             label="GitHub Issues"
-            badge={detail.allIssues.length}
+            // issue #29：頁籤 badge 顯示「open」狀態 issue 數，不是全部數
+            // 與 Sidebar / Overview 的「open issue 數」語意一致
+            badge={detail.allIssues.filter((i) => i.state === 'open').length}
           />
           <TabButton
             active={tab === 'review'}
