@@ -1,9 +1,9 @@
 import { AlertOctagon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { OverviewSkeleton, SidebarSkeleton } from './components/AppShellSkeleton';
 import EmptyState from './components/EmptyState';
 import Footer from './components/Footer';
-import LoadingSpinner from './components/LoadingSpinner';
 import RequireAuthGate from './components/RequireAuthGate';
 import Sidebar from './components/Sidebar';
 import ToastProvider from './components/Toast/ToastProvider';
@@ -17,6 +17,11 @@ import {
   unpinRepo as apiUnpinRepo,
 } from './data/api';
 import { invalidateAllRepoDetails } from './data/repoDetailCache';
+import {
+  clearCachedSummary,
+  readCachedSummary,
+  writeCachedSummary,
+} from './data/summaryCache';
 import type { Summary } from 'shared';
 import { useSession, type UseSessionResult } from './hooks/useSession';
 
@@ -64,7 +69,9 @@ export type TAppShellContext = {
  * 負責：載入 summary.json、組合 TopNav + Sidebar + main outlet、協調手機版 drawer 狀態
  */
 const AppShell = () => {
-  const [summary, setSummary] = useState<Summary | null>(null);
+  // issue #31：開始就用 sessionStorage 的舊資料 hydration，避免每次重整都 white-screen
+  // 緊接著 useEffect 會打 fetchSummary 拉新資料覆蓋（stale-while-revalidate）
+  const [summary, setSummary] = useState<Summary | null>(() => readCachedSummary());
   const [error, setError] = useState<Error | null>(null);
   /** 後端明確告知需要登入（HTTP 401）；與一般錯誤分流渲染 RequireAuthGate */
   const [needsAuth, setNeedsAuth] = useState<boolean>(false);
@@ -103,6 +110,7 @@ const AppShell = () => {
     try {
       const data = await fetchSummary();
       setSummary(data);
+      writeCachedSummary(data);
     } catch (err) {
       // 不打斷 UI；console.error 留紀錄，避免 prod 上靜默失敗難以查
       console.error('[AppShell] refreshSummary 失敗：', err);
@@ -122,6 +130,8 @@ const AppShell = () => {
       setError(null);
       setNeedsAuth(true);
       setPinnedRepos(new Set());
+      // 未登入時清掉先前快取，避免下一個使用者拿到上一個 session 的資料
+      clearCachedSummary();
       return;
     }
 
@@ -132,13 +142,17 @@ const AppShell = () => {
     void Promise.all([
       fetchSummary()
         .then((data) => {
-          if (!cancelled) setSummary(data);
+          if (!cancelled) {
+            setSummary(data);
+            writeCachedSummary(data);
+          }
         })
         .catch((err: unknown) => {
           if (cancelled) return;
           if (err instanceof ApiError && err.httpStatus === 401) {
             setSummary(null);
             setNeedsAuth(true);
+            clearCachedSummary();
             return;
           }
           setError(err instanceof Error ? err : new Error(String(err)));
@@ -256,12 +270,15 @@ const AppShell = () => {
   }
 
   if (!summary) {
+    // issue #31：用 skeleton 取代原本置中 LoadingSpinner
+    // 維持 sidebar + main 兩欄結構，使用者第一時間看到的是熟悉的版面而非單調轉圈
     return (
       <ToastProvider>
         <div className="flex h-full flex-col">
           <TopNav summary={null} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} />
-          <div className="flex flex-1 items-center justify-center bg-[--color-surface]">
-            <LoadingSpinner size="lg" />
+          <div className="flex flex-1 overflow-hidden bg-[--color-surface]">
+            <SidebarSkeleton />
+            <OverviewSkeleton />
           </div>
         </div>
       </ToastProvider>
