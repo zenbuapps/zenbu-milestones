@@ -2,6 +2,7 @@ import {
   AlertOctagon,
   ArrowLeft,
   CircleDot,
+  ClipboardList,
   ExternalLink,
   EyeOff,
   FilePlus2,
@@ -19,6 +20,7 @@ import IssueSubmitForm from '../components/IssueSubmitForm';
 import RoadmapTimeline from '../components/RoadmapTimeline';
 import PageHeader from '../components/PageHeader';
 import RepoIssueList from '../components/RepoIssueList';
+import RepoPendingIssuesPanel from '../components/RepoPendingIssuesPanel';
 import RequireAuthGate from '../components/RequireAuthGate';
 import { ApiError, fetchRepoDetail } from '../data/api';
 import {
@@ -33,10 +35,17 @@ import { formatDate } from '../utils/date';
 // 需同步：DashboardService 產出 owner、packages/shared 新增 owner 欄位、此處改讀 detail.owner。
 const DEFAULT_REPO_OWNER = 'zenbuapps';
 
-/** issue #21：RoadmapPage 兩個頁籤 */
-type TRepoTab = 'issues' | 'roadmaps';
-const parseRepoTab = (raw: string | null): TRepoTab =>
-  raw === 'roadmaps' ? 'roadmaps' : 'issues';
+/**
+ * RoadmapPage 頁籤
+ * - issue #21：拆出 issues / roadmaps 兩個 tab
+ * - issue #30：新增 'review' 為「待審查 Issues」，介於 GitHub Issues 與 Roadmaps 之間
+ */
+type TRepoTab = 'issues' | 'review' | 'roadmaps';
+const parseRepoTab = (raw: string | null): TRepoTab => {
+  if (raw === 'roadmaps') return 'roadmaps';
+  if (raw === 'review') return 'review';
+  return 'issues';
+};
 
 /**
  * 單一 repo 的 Roadmap 頁
@@ -283,15 +292,21 @@ const RoadmapPage = () => {
         </div>
       )}
 
-      {/* 頁籤列（issue #21）：Issues / Roadmaps，預設 Issues */}
+      {/* 頁籤列：GitHub Issues / 待審查 Issues / Roadmaps，預設 GitHub Issues（issue #30）*/}
       <div className="mb-4 border-b border-[--color-border]">
         <div className="-mb-px flex gap-1 overflow-x-auto" role="tablist">
           <TabButton
             active={tab === 'issues'}
             onClick={() => setTab('issues')}
             icon={CircleDot}
-            label="Issues"
+            label="GitHub Issues"
             badge={detail.allIssues.length}
+          />
+          <TabButton
+            active={tab === 'review'}
+            onClick={() => setTab('review')}
+            icon={ClipboardList}
+            label="待審查 Issues"
           />
           <TabButton
             active={tab === 'roadmaps'}
@@ -304,12 +319,25 @@ const RoadmapPage = () => {
       </div>
 
       {/*
-       * 兩個 panel 都保持 mount，只用 hidden 切換顯示。
-       * 這樣 RepoIssueList 內部的 query / pageSize / page state 切頁籤不會消失（驗收條件之一）。
+       * 三個 panel 都保持 mount，只用 hidden 切換顯示。
+       * 這樣 RepoIssueList 內部的 query / pageSize / page state 切頁籤不會消失。
        * `hidden` 屬性比 CSS display:none 更語意化、a11y 友善（aria-hidden 自動帶到）。
+       *
+       * 註：待審查 Issues panel 內部仍會自己 fetch；切換 tab 時不會 unmount，
+       *     避免重複請求 /api/admin/issues 或 /api/me/issues
        */}
-      <div hidden={tab !== 'issues'} role="tabpanel" aria-label="Issues">
+      <div hidden={tab !== 'issues'} role="tabpanel" aria-label="GitHub Issues">
         <RepoIssueList detail={detail} />
+      </div>
+
+      <div hidden={tab !== 'review'} role="tabpanel" aria-label="待審查 Issues">
+        {name && (
+          <RepoPendingIssuesPanel
+            repoOwner={DEFAULT_REPO_OWNER}
+            repoName={name}
+            isAdmin={isAdmin}
+          />
+        )}
       </div>
 
       <div hidden={tab !== 'roadmaps'} role="tabpanel" aria-label="Roadmaps">
