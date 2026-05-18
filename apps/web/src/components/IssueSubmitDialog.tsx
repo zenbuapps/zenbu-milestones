@@ -104,24 +104,19 @@ const IssueSubmitDialog = ({
     };
   }, [open]);
 
-  // ESC 關閉 + 初始 focus + 還原 focus
-  // - 全螢幕時 ESC 先退出全螢幕（不關閉 dialog），再按一次 ESC 才真正關閉
+  // issue #28：把「初始 focus / 還原 focus」與「ESC 關閉」拆成兩個 effect
+  // 原本合在一起時 deps 含 requestClose / isFullscreen，且 requestClose
+  // 因為 useCallback 依賴 hasUnsavedChanges，使用者每打一個字就讓
+  // requestClose 換 identity → effect 重跑 → setTimeout 把 focus 拉回
+  // panel 內第一個 focusable（DOM 順序上是右上角的 Maximize2 全螢幕按鈕），
+  // 使用者連續輸入或 backspace 清空就會觸發。
+
+  // (a) 初始 focus + 記住先前 focus 元素 + 卸載時還原，deps 只看 open
   useEffect(() => {
     if (!open) return;
 
     // 記住開啟前的 focus，關閉時還原
     previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
-
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      if (isFullscreen) {
-        setIsFullscreen(false);
-      } else {
-        requestClose();
-      }
-    };
-    window.addEventListener('keydown', handler);
 
     // 首個 focusable 自動 focus（下一個 tick，等 DOM 穩定）
     const focusTimer = window.setTimeout(() => {
@@ -132,10 +127,26 @@ const IssueSubmitDialog = ({
     }, 0);
 
     return () => {
-      window.removeEventListener('keydown', handler);
       window.clearTimeout(focusTimer);
       previouslyFocusedRef.current?.focus?.();
     };
+  }, [open]);
+
+  // (b) ESC 鍵：全螢幕時先退全螢幕、否則 requestClose；deps 跟著
+  //     isFullscreen / requestClose 走，但不會觸發 re-focus
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      if (isFullscreen) {
+        setIsFullscreen(false);
+      } else {
+        requestClose();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [open, requestClose, isFullscreen]);
 
   /** Focus trap：在 panel 內循環 Tab / Shift+Tab */
