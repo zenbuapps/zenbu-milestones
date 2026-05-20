@@ -56,3 +56,12 @@ tls:
 admin:
   email: ""
   password: ""
+
+# Migration Job Cleanup
+migration:
+  ttlSecondsAfterFinished: 604800  # 7 days fallback (all jobs, success or failure)
+  cleanup:
+    enabled: true
+    schedule: "0 3 * * *"           # Daily at 03:00
+    successTTLSeconds: 259200        # 3 days for successful jobs
+    image: bitnami/kubectl:1.33
