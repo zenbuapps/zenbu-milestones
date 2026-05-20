@@ -354,8 +354,13 @@ const Sidebar = ({
             strokeWidth={2}
             className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[--color-text-muted]"
           />
+          {/*
+           * issue #32：用 type="text" 而非 type="search"，避免 WebKit / Chromium
+           * 對 type=search 多畫一顆原生 ✕ 取消按鈕，與右側自訂的 Lucide X
+           * 按鈕並列產生兩個 X。a11y 仍由 aria-label 與右側 button 覆蓋。
+           */}
           <input
-            type="search"
+            type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="搜尋 repo"
