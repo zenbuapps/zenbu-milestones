@@ -65,7 +65,7 @@ migration:
     enabled: true
     schedule: "0 3 * * *"           # Daily at 03:00
     successTTLSeconds: 259200        # 3 days for successful jobs
-    image: bitnami/kubectl:1.33
+    image: bitnami/kubectl:latest
 
 # Redis
 redis:
