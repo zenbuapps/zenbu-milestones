@@ -47,7 +47,7 @@ export class AdminDashboardController {
 
   @Post('refresh-data')
   @HttpCode(HttpStatus.OK)
-  refresh(): ApiSuccess<RefreshDataResult> {
+  async refresh(): Promise<ApiSuccess<RefreshDataResult>> {
     const now = Date.now();
     const elapsed = now - this.lastRefreshAt;
     if (this.lastRefreshAt > 0 && elapsed < REFRESH_MIN_INTERVAL_MS) {
@@ -66,7 +66,7 @@ export class AdminDashboardController {
       );
     }
 
-    const clearedKeys = this.cache.deleteByPrefix(DASHBOARD_CACHE_PREFIX);
+    const clearedKeys = await this.cache.deleteByPrefix(DASHBOARD_CACHE_PREFIX);
     this.lastRefreshAt = now;
     const clearedAt = new Date(now).toISOString();
     this.logger.log(
