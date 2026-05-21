@@ -2,7 +2,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { RedisStore } from 'connect-redis';
+import RedisStore from 'connect-redis';
 import { RedisService } from './redis/redis.service';
 import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
