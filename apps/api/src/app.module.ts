@@ -7,6 +7,7 @@ import { HealthController } from './health/health.controller';
 import { IssuesModule } from './issues/issues.module';
 import { MeModule } from './me/me.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { RedisModule } from './redis/redis.module';
 import { ReposModule } from './repos/repos.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.module';
@@ -36,6 +37,7 @@ import { UsersModule } from './users/users.module';
       envFilePath: ['../../.env'],
     }),
     PrismaModule,
+    RedisModule,
     UsersModule,
     AuthModule,
     IssuesModule,
