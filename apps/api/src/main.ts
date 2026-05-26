@@ -2,7 +2,8 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import connectPgSimple from 'connect-pg-simple';
+import RedisStore from 'connect-redis';
+import { RedisService } from './redis/redis.service';
 import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import passport from 'passport';
@@ -117,21 +118,16 @@ async function bootstrap(): Promise<void> {
   }
 
   // --------------------------------------------------------------
-  // Session store：用 PostgreSQL 持久化
-  //   - 避免 api watch reload / 部署時 session 全清（MemoryStore 的雷）
-  //   - createTableIfMissing=true 首次啟動會自動建 "session" 表，不需進 Prisma migrate
-  //   - DATABASE_URL 由 ConfigModule 從 root .env 載入，Prisma 已驗證可連線
+  // Session store：用 Redis 持久化
+  //   - 比 PostgreSQL 更快（~1-2ms vs ~5-10ms per request）
+  //   - Pod 重啟不影響已登入使用者
+  //   - prefix 'sess:' 與 dashboard cache 'dashboard:' 隔離
   // --------------------------------------------------------------
-  const databaseUrl = config.get<string>('DATABASE_URL');
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL 未設定，請檢查 .env');
-  }
-  const PgSession = connectPgSimple(session);
-  const sessionStore = new PgSession({
-    conObject: { connectionString: databaseUrl },
-    tableName: 'session',
-    createTableIfMissing: true,
-    pruneSessionInterval: 60 * 15, // 15 分鐘清一次過期 session
+  const redisService = app.get(RedisService);
+  const sessionStore = new RedisStore({
+    client: redisService.getClient(),
+    prefix: 'sess:',
+    ttl: 7 * 24 * 60 * 60, // 7 天（秒），與 cookie maxAge 一致
   });
 
   app.use(

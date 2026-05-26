@@ -1,0 +1,46 @@
+{{- if .Values.migration.cleanup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "zenbu-roadmaps.name" . }}-migrate-cleanup
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "zenbu-roadmaps.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.migration.cleanup.schedule | quote }}
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      ttlSecondsAfterFinished: 3600
+      template:
+        spec:
+          serviceAccountName: {{ include "zenbu-roadmaps.name" . }}-migrate-cleanup
+          containers:
+            - name: cleanup
+              image: {{ .Values.migration.cleanup.image }}
+              command: [sh, -c]
+              args:
+                - |
+                  echo "Cleaning up successful migration jobs older than $SUCCESS_TTL seconds..."
+                  DELETED=$(kubectl get jobs -n $NAMESPACE -l app={{ include "zenbu-roadmaps.name" . }}-migrate \
+                    --field-selector status.successful=1 -o json \
+                  | jq -r --argjson ttl $SUCCESS_TTL '
+                      .items[]
+                      | select(.status.completionTime)
+                      | select((now - (.status.completionTime | fromdateiso8601)) > $ttl)
+                      | .metadata.name
+                    ')
+                  if [ -z "$DELETED" ]; then
+                    echo "No jobs to clean up."
+                  else
+                    echo "$DELETED" | xargs kubectl delete job -n $NAMESPACE
+                  fi
+                  echo "Cleanup complete."
+              env:
+                - name: NAMESPACE
+                  value: {{ .Values.namespace }}
+                - name: SUCCESS_TTL
+                  value: {{ .Values.migration.cleanup.successTTLSeconds | quote }}
+          restartPolicy: OnFailure
+{{- end }}

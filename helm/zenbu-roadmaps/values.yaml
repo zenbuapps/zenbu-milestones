@@ -17,6 +17,7 @@ api:
     GITHUB_ORG: zenbuapps
   secrets:
     DATABASE_URL: "postgresql://zenburoadmaps:change-me@zenburoadmaps-postgresql:5432/zenburoadmaps"
+    REDIS_URL: "redis://:change-me@zenburoadmaps-redis:6379/0"
     SESSION_SECRET: change-me
     SESSION_COOKIE_SECURE: "true"
     APP_BASE_URL: "https://roadmaps.zenbuapps.com"
@@ -56,3 +57,21 @@ tls:
 admin:
   email: ""
   password: ""
+
+# Migration Job Cleanup
+migration:
+  ttlSecondsAfterFinished: 604800  # 7 days fallback (all jobs, success or failure)
+  cleanup:
+    enabled: true
+    schedule: "0 3 * * *"           # Daily at 03:00
+    successTTLSeconds: 259200        # 3 days for successful jobs
+    image: bitnami/kubectl:latest
+
+# Redis
+redis:
+  enabled: true
+  image: redis:7-alpine
+  password: change-me
+  storage: 1Gi
+  storageClass: local-path
+  port: 6379
