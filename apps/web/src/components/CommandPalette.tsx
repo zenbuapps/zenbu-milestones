@@ -75,9 +75,10 @@ const flattenedIndex = (groups: TGroup[]): TResult[] =>
  * - 三個群組分組顯示，符合 issue 規格：Repos / GitHub Issues / 待審核 Issues（admin 限定）
  * - 鍵盤導航：↑ ↓ Enter Esc；query / 群組變動時 activeIndex 重置為 0
  * - 待審核 issue 採 lazy fetch：第一次打開面板才打 `/api/admin/issues?status=pending`，
- *   結果於同一 session 內快取於 component state，避免每次 Cmd+K 都打一次 API
- * - GitHub Issue 來源為 summary 已載入的 `recentClosedIssues + oldestOpenIssues`，
- *   涵蓋「目前討論度最高」的範圍；列表 header 附 hint 告知範圍（避免使用者以為是全 issue 搜尋）
+ *   結果於同一 session 內快取於 component state，避免每次 Cmd+K 都打一次 API；
+ *   client-side 再 filter 一次 `status === 'pending'`（issue #36，defense-in-depth）
+ * - GitHub Issue 來源為 summary 已載入的 `oldestOpenIssues`（issue #36：不再合併
+ *   `recentClosedIssues`，K bar 不曝光已 closed 的 issue）；列表 header 附 hint 告知範圍
  * - 選中 repo / pending → 在當前分頁路由切換；GitHub issue → 另開分頁到 github.com
  * - z-index 100，蓋過 TopNav（z-50）與 sidebar drawer（z-30/40）
  */
@@ -158,15 +159,17 @@ const CommandPalette = ({
       }));
   }, [summary.repos, hiddenRepos, query, navigate, onClose]);
 
-  /** GitHub issues 結果（來自 summary 已載入的近期活躍 issue，跨 repo）*/
+  /**
+   * GitHub issues 結果（來自 summary 已載入的目前 open issue，跨 repo）
+   *
+   * issue #36：K bar 不應出現「已 closed」的 issue —— 故只取 `oldestOpenIssues`，
+   * 不再合併 `recentClosedIssues`；並再加一次 `i.state === 'open'` 防呆，
+   * 即便上游資料源誤帶 closed 進來也擋下，避免 UI 偷偷漏出已關閉 issue。
+   */
   const issueResults = useMemo<TResult[]>(() => {
-    const merged = [
-      ...summary.recentClosedIssues,
-      ...summary.oldestOpenIssues,
-    ];
-    // 同一張 issue 不會同時 open + closed，但保險：以 owner/repo#number 去重
     const seen = new Set<string>();
-    return merged
+    return summary.oldestOpenIssues
+      .filter((i) => i.state === 'open') // issue #36：client-side defense-in-depth
       .filter((i) => !hiddenRepos.has(i.repoName))
       .filter((i) => {
         const k = `${i.repoOwner}/${i.repoName}#${i.number}`;
@@ -185,30 +188,29 @@ const CommandPalette = ({
         key: `issue:${i.repoOwner}/${i.repoName}#${i.number}`,
         group: 'issue',
         icon: CircleDot,
-        iconClass:
-          i.state === 'open'
-            ? 'bg-green-50 text-green-600'
-            : 'bg-[--color-surface-overlay] text-[--color-text-muted]',
+        iconClass: 'bg-green-50 text-green-600',
         title: i.title,
-        meta: `${i.repoName} · #${i.number} · ${i.state === 'open' ? 'open' : 'closed'}`,
+        meta: `${i.repoName} · #${i.number} · open`,
         onSelect: () => {
           window.open(i.htmlUrl, '_blank', 'noopener,noreferrer');
           onClose();
         },
         external: true,
       }));
-  }, [
-    summary.recentClosedIssues,
-    summary.oldestOpenIssues,
-    hiddenRepos,
-    query,
-    onClose,
-  ]);
+  }, [summary.oldestOpenIssues, hiddenRepos, query, onClose]);
 
-  /** 待審核 issues（admin only）*/
+  /**
+   * 待審核 issues（admin only）
+   *
+   * issue #36：後端 `listAll('pending')` 雖已 filter 到 `status=pending`，但 K bar 不該
+   * 漏出 `rejected` / `approved` / `synced-to-github` 任一狀態。此處加 client-side
+   * defense-in-depth filter，萬一 fetch 參數誤改成 'all' 或 server 邏輯回歸，
+   * UI 仍只會顯示真正待審核的 issue。
+   */
   const pendingResults = useMemo<TResult[]>(() => {
     if (!isAdmin || !pendingIssues) return [];
     return pendingIssues
+      .filter((i) => i.status === 'pending') // issue #36：client-side defense-in-depth
       .filter(
         (i) =>
           matches(i.title, query) ||
@@ -241,7 +243,7 @@ const CommandPalette = ({
       out.push({
         group: 'issue',
         label: 'GitHub Issues',
-        hint: '近期活躍 issue（open / 近 7 天 closed）',
+        hint: '目前 open 中、跨 repo 依建立時間最舊優先', // issue #36：移除 closed 後的範圍說明
         items: issueResults,
       });
     }
