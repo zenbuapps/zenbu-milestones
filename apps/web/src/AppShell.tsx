@@ -2,12 +2,14 @@ import { AlertOctagon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { OverviewSkeleton, SidebarSkeleton } from './components/AppShellSkeleton';
+import CommandPalette from './components/CommandPalette';
 import EmptyState from './components/EmptyState';
 import Footer from './components/Footer';
 import RequireAuthGate from './components/RequireAuthGate';
 import Sidebar from './components/Sidebar';
 import ToastProvider from './components/Toast/ToastProvider';
 import TopNav from './components/TopNav';
+import { isCmdK, useGlobalHotkey } from './hooks/useGlobalHotkey';
 import {
   ApiError,
   fetchMyPinnedRepos,
@@ -76,6 +78,8 @@ const AppShell = () => {
   /** 後端明確告知需要登入（HTTP 401）；與一般錯誤分流渲染 RequireAuthGate */
   const [needsAuth, setNeedsAuth] = useState<boolean>(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false);
+  /** issue #35：全域命令面板（Ctrl+K / Cmd+K）開關 */
+  const [isPaletteOpen, setIsPaletteOpen] = useState<boolean>(false);
   const [hiddenRepos, setHiddenRepos] = useState<Set<string>>(() => new Set());
   const [nonSubmittableRepos, setNonSubmittableRepos] = useState<Set<string>>(() => new Set());
   /** 釘選清單；key = `${owner}/${name}`。issue #16 */
@@ -237,6 +241,11 @@ const AppShell = () => {
   }, [isSidebarOpen]);
 
   const openSidebar = useCallback(() => setIsSidebarOpen(true), []);
+  const openPalette = useCallback(() => setIsPaletteOpen(true), []);
+  const closePalette = useCallback(() => setIsPaletteOpen(false), []);
+  /** issue #35：全域 Ctrl+K / Cmd+K toggle 命令面板 */
+  const togglePalette = useCallback(() => setIsPaletteOpen((p) => !p), []);
+  useGlobalHotkey(isCmdK, togglePalette);
   const closeSidebar = useCallback(() => setIsSidebarOpen(false), []);
 
   if (needsAuth) {
@@ -298,7 +307,7 @@ const AppShell = () => {
   return (
     <ToastProvider>
       <div className="flex h-full flex-col">
-        <TopNav summary={summary} onMenuClick={openSidebar} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} />
+        <TopNav summary={summary} onMenuClick={openSidebar} session={session.state} onLogin={session.login} onLogout={session.logout} onRefresh={refreshSummary} isRefreshing={isRefreshingSummary} onOpenPalette={openPalette} />
         <div className="relative flex flex-1 overflow-hidden">
           <Sidebar
             summary={summary}
@@ -330,6 +339,18 @@ const AppShell = () => {
             <Footer />
           </main>
         </div>
+
+        {/* issue #35：全域命令面板（Ctrl+K / Cmd+K）*/}
+        <CommandPalette
+          open={isPaletteOpen}
+          onClose={closePalette}
+          summary={summary}
+          hiddenRepos={hiddenRepos}
+          isAdmin={
+            session.state.status === 'authenticated' &&
+            session.state.user.role === 'admin'
+          }
+        />
       </div>
     </ToastProvider>
   );
